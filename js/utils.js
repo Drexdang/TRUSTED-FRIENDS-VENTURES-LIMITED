@@ -27,6 +27,7 @@ function monthsOverdueSince(loanDate, durationMonths, cutoffDate = new Date(2026
     dueDate.setMonth(dueDate.getMonth() + durationMonths);
     const today = new Date();
 
+    // Start counting from the later of the due date and the cutoff date (Jan 1, 2026)
     const startDate = dueDate > cutoffDate ? dueDate : cutoffDate;
     if (today <= startDate) return 0;
 
@@ -37,7 +38,7 @@ function monthsOverdueSince(loanDate, durationMonths, cutoffDate = new Date(2026
 // Auto penalty based on outstanding balance (provisional) and overdue months
 function calculateLoanFields(amount, rate, duration, adminFees, remitted, loanDate) {
     const interest = amount * (rate / 100) * duration;
-    // Balance before penalty: amount + interest + fees - paid
+    // Balance before penalty: amount + interest + admin fees - paid
     const provisionalBalance = amount + adminFees + interest - remitted;
     let autoPenalty = 0;
     if (provisionalBalance > 0) {
@@ -58,7 +59,7 @@ function calculateLoanFields(amount, rate, duration, adminFees, remitted, loanDa
     };
 }
 
-// Keep old name for backward compatibility
+// Keep old name for backward compatibility (if needed)
 function monthsOverdue(loanDate, duration) {
     return monthsOverdueSince(loanDate, duration);
 }
