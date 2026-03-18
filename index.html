@@ -132,86 +132,107 @@
             </div>
         </template>
 
-        <!-- Loans Page -->
-        <template x-if="page === 'loans'">
-            <div x-data="loans" x-init="init" class="space-y-6">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                    <h1 class="text-3xl font-bold">Loan Records</h1>
-                    <button @click="showAddForm = !showAddForm" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 w-full sm:w-auto">
-                        <span x-text="showAddForm ? 'Cancel' : '+ Add Loan'"></span>
-                    </button>
+       <!-- Loans Page -->
+<template x-if="page === 'loans'">
+    <div x-data="loans" x-init="init" class="space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <h1 class="text-3xl font-bold">Loan Records</h1>
+            <button @click="showAddForm = !showAddForm" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 w-full sm:w-auto">
+                <span x-text="showAddForm ? 'Cancel' : '+ Add Loan'"></span>
+            </button>
+        </div>
+        <!-- Add Form -->
+        <div x-show="showAddForm" class="bg-white p-6 rounded shadow">
+            <h2 class="text-xl font-bold mb-4">New Loan</h2>
+            <form @submit.prevent="addLoan">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label class="block">Client Name *</label><input type="text" x-model="formData.names" class="w-full border p-2 rounded" required></div>
+                    <div><label class="block">Date</label><input type="date" x-model="formData.date" class="w-full border p-2 rounded"></div>
+                    <div><label class="block">Amount (₦)</label><input type="number" step="0.01" x-model="formData.amount" class="w-full border p-2 rounded" required></div>
+                    <div><label class="block">Interest Rate %</label><input type="number" step="0.01" x-model="formData.int_rate" class="w-full border p-2 rounded"></div>
+                    <div><label class="block">Duration (months)</label><input type="number" step="1" x-model="formData.duration" class="w-full border p-2 rounded"></div>
+                    <div><label class="block">Admin Fees (₦)</label><input type="number" step="0.01" x-model="formData.admin_fees" class="w-full border p-2 rounded"></div>
+                    <div><label class="block">Already Paid (₦)</label><input type="number" step="0.01" x-model="formData.amt_remitted" class="w-full border p-2 rounded"></div>
+                    <!-- Manual Penalty field -->
+                    <div><label class="block">Manual Penalty (₦)</label><input type="number" step="0.01" x-model="formData.manual_penalty" class="w-full border p-2 rounded"></div>
                 </div>
-                <div x-show="showAddForm" class="bg-white p-6 rounded shadow">
-                    <h2 class="text-xl font-bold mb-4">New Loan</h2>
-                    <form @submit.prevent="addLoan">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div><label class="block">Client Name *</label><input type="text" x-model="formData.names" class="w-full border p-2 rounded" required></div>
-                            <div><label class="block">Date</label><input type="date" x-model="formData.date" class="w-full border p-2 rounded"></div>
-                            <div><label class="block">Amount (₦)</label><input type="number" step="0.01" x-model="formData.amount" class="w-full border p-2 rounded" required></div>
-                            <div><label class="block">Interest Rate %</label><input type="number" step="0.01" x-model="formData.int_rate" class="w-full border p-2 rounded"></div>
-                            <div><label class="block">Duration (months)</label><input type="number" step="1" x-model="formData.duration" class="w-full border p-2 rounded"></div>
-                            <div><label class="block">Admin Fees (₦)</label><input type="number" step="0.01" x-model="formData.admin_fees" class="w-full border p-2 rounded"></div>
-                            <div><label class="block">Already Paid (₦)</label><input type="number" step="0.01" x-model="formData.amt_remitted" class="w-full border p-2 rounded"></div>
-                        </div>
-                        <button type="submit" class="mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 w-full sm:w-auto">Save Loan</button>
-                    </form>
-                </div>
-                <div><input type="text" placeholder="Search by name or SN" x-model="search" class="w-full md:w-1/3 border p-2 rounded"></div>
-                <div class="bg-white rounded shadow overflow-x-auto">
-                    <table class="min-w-full">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-4 py-2 text-left">SN</th><th>Name</th><th>Date</th><th>Amount</th><th>Rate</th><th>Dur</th><th>Admin</th><th>Interest</th><th>Penalty</th><th>Total</th><th>Paid</th><th>Balance</th><th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="loan in filteredLoans" :key="loan.id">
-                                <tr class="border-t">
-                                    <td class="px-4 py-2" x-text="loan.sn"></td>
-                                    <td x-text="loan.names"></td>
-                                    <td x-text="loan.date ? new Date(loan.date.seconds*1000).toLocaleDateString() : ''"></td>
-                                    <td x-text="formatCurrency(loan.amount)"></td>
-                                    <td x-text="loan.int_rate + '%'"></td>
-                                    <td x-text="loan.duration"></td>
-                                    <td x-text="formatCurrency(loan.admin_fees)"></td>
-                                    <td x-text="formatCurrency(loan.interest)"></td>
-                                    <td x-text="formatCurrency(loan.penalty_charged)"></td>
-                                    <td x-text="formatCurrency(loan.g_total)"></td>
-                                    <td x-text="formatCurrency(loan.amt_remitted)"></td>
-                                    <td x-text="formatCurrency(loan.balance)"></td>
-                                    <td>
-                                        <button @click="editLoan(loan)" class="text-indigo-600 mr-2">Edit</button>
-                                        <button @click="deleteLoan(loan)" class="text-red-600">Delete</button>
-                                    </td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                </div>
-                <!-- Edit Modal -->
-                <div x-show="showEditForm" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-                    <div class="bg-white rounded-lg p-6 max-w-2xl w-full">
-                        <h2 class="text-xl font-bold mb-4">Edit Loan SN <span x-text="editingLoan?.sn"></span></h2>
-                        <form @submit.prevent="updateLoan">
-                            <div class="grid grid-cols-2 gap-4">
-                                <div><label>Name</label><input type="text" x-model="editFormData.names" class="w-full border p-2 rounded"></div>
-                                <div><label>Date</label><input type="date" x-model="editFormData.date" class="w-full border p-2 rounded"></div>
-                                <div><label>Amount</label><input type="number" step="0.01" x-model="editFormData.amount" class="w-full border p-2 rounded"></div>
-                                <div><label>Rate %</label><input type="number" step="0.01" x-model="editFormData.int_rate" class="w-full border p-2 rounded"></div>
-                                <div><label>Duration</label><input type="number" step="1" x-model="editFormData.duration" class="w-full border p-2 rounded"></div>
-                                <div><label>Admin Fees</label><input type="number" step="0.01" x-model="editFormData.admin_fees" class="w-full border p-2 rounded"></div>
-                                <div><label>Already Paid</label><input type="number" step="0.01" x-model="editFormData.amt_remitted" class="w-full border p-2 rounded"></div>
-                                <div><label>Penalty (manual)</label><input type="number" step="0.01" x-model="editFormData.penalty_charged" class="w-full border p-2 rounded"></div>
-                            </div>
-                            <div class="mt-4 flex space-x-2">
-                                <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded">Update</button>
-                                <button type="button" @click="showEditForm = false; editingLoan = null" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
-                            </div>
-                        </form>
+                <button type="submit" class="mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 w-full sm:w-auto">Save Loan</button>
+            </form>
+        </div>
+        <div><input type="text" placeholder="Search by name or SN" x-model="search" class="w-full md:w-1/3 border p-2 rounded"></div>
+        <!-- Loans Table -->
+        <div class="bg-white rounded shadow overflow-x-auto">
+            <table class="min-w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left">SN</th>
+                        <th>Name</th>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Rate</th>
+                        <th>Dur</th>
+                        <th>Admin</th>
+                        <th>Interest</th>
+                        <th>Auto Penalty</th>
+                        <th>Manual Penalty</th>
+                        <th>Total</th>
+                        <th>Paid</th>
+                        <th>Balance</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="loan in filteredLoans" :key="loan.id">
+                        <tr class="border-t">
+                            <td class="px-4 py-2" x-text="loan.sn"></td>
+                            <td x-text="loan.names"></td>
+                            <td x-text="loan.date ? new Date(loan.date.seconds*1000).toLocaleDateString() : ''"></td>
+                            <td x-text="formatCurrency(loan.amount)"></td>
+                            <td x-text="loan.int_rate + '%'"></td>
+                            <td x-text="loan.duration"></td>
+                            <td x-text="formatCurrency(loan.admin_fees)"></td>
+                            <td x-text="formatCurrency(loan.interest)"></td>
+                            <td x-text="formatCurrency(loan.auto_penalty || 0)"></td>
+                            <td x-text="formatCurrency(loan.manual_penalty || 0)"></td>
+                            <td x-text="formatCurrency(loan.g_total)"></td>
+                            <td x-text="formatCurrency(loan.amt_remitted)"></td>
+                            <td x-text="formatCurrency(loan.balance)"></td>
+                            <td>
+                                <button @click="editLoan(loan)" class="text-indigo-600 mr-2">Edit</button>
+                                <button @click="deleteLoan(loan)" class="text-red-600">Delete</button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <!-- Edit Modal -->
+        <div x-show="showEditForm" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg p-6 max-w-2xl w-full">
+                <h2 class="text-xl font-bold mb-4">Edit Loan SN <span x-text="editingLoan?.sn"></span></h2>
+                <form @submit.prevent="updateLoan">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label>Name</label><input type="text" x-model="editFormData.names" class="w-full border p-2 rounded"></div>
+                        <div><label>Date</label><input type="date" x-model="editFormData.date" class="w-full border p-2 rounded"></div>
+                        <div><label>Amount</label><input type="number" step="0.01" x-model="editFormData.amount" class="w-full border p-2 rounded"></div>
+                        <div><label>Rate %</label><input type="number" step="0.01" x-model="editFormData.int_rate" class="w-full border p-2 rounded"></div>
+                        <div><label>Duration</label><input type="number" step="1" x-model="editFormData.duration" class="w-full border p-2 rounded"></div>
+                        <div><label>Admin Fees</label><input type="number" step="0.01" x-model="editFormData.admin_fees" class="w-full border p-2 rounded"></div>
+                        <div><label>Already Paid</label><input type="number" step="0.01" x-model="editFormData.amt_remitted" class="w-full border p-2 rounded"></div>
+                        <!-- Auto Penalty (editable) -->
+                        <div><label>Auto Penalty (₦)</label><input type="number" step="0.01" x-model="editFormData.auto_penalty" class="w-full border p-2 rounded"></div>
+                        <!-- Manual Penalty (editable) -->
+                        <div><label>Manual Penalty (₦)</label><input type="number" step="0.01" x-model="editFormData.manual_penalty" class="w-full border p-2 rounded"></div>
                     </div>
-                </div>
+                    <div class="mt-4 flex space-x-2">
+                        <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded">Update</button>
+                        <button type="button" @click="showEditForm = false; editingLoan = null" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
+                    </div>
+                </form>
             </div>
-        </template>
+        </div>
+    </div>
+</template>
 
         <!-- Expenses & Income & Equity Page -->
         <template x-if="page === 'expenses'">
@@ -575,7 +596,7 @@
 
         <!-- Footer (visible when logged in) -->
         <footer class="text-center text-gray-500 text-xs py-4 border-t mt-8">
-            Developed By Drex Dang For Trusted Friends Venturs Limited &copy; 2026 | RC: 9384125 | All rights reserved.
+            Trusted Friends Limited &copy; 2026 | RC: 9384125 | All rights reserved.
         </footer>
     </div>
 </body>

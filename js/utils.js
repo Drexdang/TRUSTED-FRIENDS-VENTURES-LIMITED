@@ -20,39 +20,45 @@ function showToast(message, type = 'success', duration = 3000) {
     }, duration);
 }
 
+// Months overdue counting only from 2026-01-01
+function monthsOverdueSince(loanDate, durationMonths, cutoffDate = new Date(2026, 0, 1)) {
+    if (!loanDate) return 0;
+    const dueDate = new Date(loanDate);
+    dueDate.setMonth(dueDate.getMonth() + durationMonths);
+    const today = new Date();
+
+    const startDate = dueDate > cutoffDate ? dueDate : cutoffDate;
+    if (today <= startDate) return 0;
+
+    const diffDays = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+    return Math.floor(diffDays / 30);
+}
+
+// Original function (now uses new overdue calculation)
 function calculateLoanFields(amount, rate, duration, adminFees, remitted, loanDate) {
     const interest = amount * (rate / 100) * duration;
-    const dueDate = new Date(loanDate);
-    dueDate.setMonth(dueDate.getMonth() + duration);
-    const today = new Date();
-    let penalty = 0;
-    if (today > dueDate) {
-        const diffDays = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
-        const overdueMonths = Math.floor(diffDays / 30);
-        penalty = amount * 0.10 * overdueMonths;
-    }
+    const overdueMonths = monthsOverdueSince(loanDate, duration);
+    let autoPenalty = amount * 0.10 * overdueMonths;
+
     const provisional = amount + adminFees + interest - remitted;
-    if (provisional <= 0) penalty = 0;
-    const totalAdd = adminFees + interest + penalty;
+    if (provisional <= 0) autoPenalty = 0;
+
+    const totalAdd = adminFees + interest + autoPenalty;
     const gTotal = amount + totalAdd;
     const balance = Math.max(gTotal - remitted, 0);
+
     return {
         interest: Math.round(interest * 100) / 100,
-        penalty: Math.round(penalty * 100) / 100,
+        autoPenalty: Math.round(autoPenalty * 100) / 100,
         totalAdd: Math.round(totalAdd * 100) / 100,
         gTotal: Math.round(gTotal * 100) / 100,
         balance: Math.round(balance * 100) / 100
     };
 }
 
+// Keep old name for backward compatibility (if needed)
 function monthsOverdue(loanDate, duration) {
-    if (!loanDate) return 0;
-    const dueDate = new Date(loanDate);
-    dueDate.setMonth(dueDate.getMonth() + duration);
-    const today = new Date();
-    if (today <= dueDate) return 0;
-    const diffDays = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
-    return Math.floor(diffDays / 30);
+    return monthsOverdueSince(loanDate, duration);
 }
 
 function timestampToDate(ts) {

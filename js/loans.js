@@ -12,7 +12,8 @@ document.addEventListener('alpine:init', () => {
             int_rate: 5,
             duration: 3,
             admin_fees: 0,
-            amt_remitted: 0
+            amt_remitted: 0,
+            manual_penalty: 0   // renamed from extra_penalty
         },
         editFormData: {},
         init() {
@@ -39,34 +40,41 @@ document.addEventListener('alpine:init', () => {
                 int_rate: 5,
                 duration: 3,
                 admin_fees: 0,
-                amt_remitted: 0
+                amt_remitted: 0,
+                manual_penalty: 0
             };
         },
         async addLoan() {
             try {
                 const nextSN = await getNextLoanSN();
-                const fields = calculateLoanFields(
-                    Number(this.formData.amount),
-                    Number(this.formData.int_rate),
-                    Number(this.formData.duration),
-                    Number(this.formData.admin_fees),
-                    Number(this.formData.amt_remitted),
-                    new Date(this.formData.date)
-                );
+                const amount = Number(this.formData.amount);
+                const rate = Number(this.formData.int_rate);
+                const duration = Number(this.formData.duration);
+                const adminFees = Number(this.formData.admin_fees);
+                const remitted = Number(this.formData.amt_remitted);
+                const manualPenalty = Number(this.formData.manual_penalty);
+                const loanDate = new Date(this.formData.date);
+
+                const fields = calculateLoanFields(amount, rate, duration, adminFees, remitted, loanDate);
+                const totalAdd = fields.totalAdd + manualPenalty;
+                const gTotal = fields.gTotal + manualPenalty;
+                const balance = Math.max(gTotal - remitted, 0);
+
                 await db.collection('loans').add({
                     sn: nextSN,
                     names: this.formData.names,
-                    date: firebase.firestore.Timestamp.fromDate(new Date(this.formData.date)),
-                    amount: Number(this.formData.amount),
-                    int_rate: Number(this.formData.int_rate),
-                    duration: Number(this.formData.duration),
-                    admin_fees: Number(this.formData.admin_fees),
-                    amt_remitted: Number(this.formData.amt_remitted),
+                    date: firebase.firestore.Timestamp.fromDate(loanDate),
+                    amount: amount,
+                    int_rate: rate,
+                    duration: duration,
+                    admin_fees: adminFees,
+                    amt_remitted: remitted,
                     interest: fields.interest,
-                    penalty_charged: fields.penalty,
-                    total: fields.totalAdd,
-                    g_total: fields.gTotal,
-                    balance: fields.balance
+                    auto_penalty: fields.autoPenalty,
+                    manual_penalty: manualPenalty,   // saved as manual_penalty
+                    total: totalAdd,
+                    g_total: gTotal,
+                    balance: balance
                 });
                 showToast('Loan added successfully');
                 this.showAddForm = false;
@@ -85,44 +93,40 @@ document.addEventListener('alpine:init', () => {
                 duration: loan.duration,
                 admin_fees: loan.admin_fees,
                 amt_remitted: loan.amt_remitted,
-                penalty_charged: loan.penalty_charged
+                auto_penalty: loan.auto_penalty || 0,
+                manual_penalty: loan.manual_penalty || 0   // load manual_penalty
             };
             this.showEditForm = true;
         },
         async updateLoan() {
             try {
-                const fields = calculateLoanFields(
-                    Number(this.editFormData.amount),
-                    Number(this.editFormData.int_rate),
-                    Number(this.editFormData.duration),
-                    Number(this.editFormData.admin_fees),
-                    Number(this.editFormData.amt_remitted),
-                    new Date(this.editFormData.date)
-                );
-                let penalty = fields.penalty;
-                let balance = fields.balance;
-                if (this.editFormData.penalty_charged > 0) {
-                    penalty = Number(this.editFormData.penalty_charged);
-                    const interest = this.editFormData.amount * (this.editFormData.int_rate / 100) * this.editFormData.duration;
-                    const totalAdd = this.editFormData.admin_fees + interest + penalty;
-                    const gTotal = this.editFormData.amount + totalAdd;
-                    balance = 0;
-                    fields.interest = interest;
-                    fields.totalAdd = totalAdd;
-                    fields.gTotal = gTotal;
-                }
+                const amount = Number(this.editFormData.amount);
+                const rate = Number(this.editFormData.int_rate);
+                const duration = Number(this.editFormData.duration);
+                const adminFees = Number(this.editFormData.admin_fees);
+                const remitted = Number(this.editFormData.amt_remitted);
+                const autoPenalty = Number(this.editFormData.auto_penalty);
+                const manualPenalty = Number(this.editFormData.manual_penalty);
+                const loanDate = new Date(this.editFormData.date);
+
+                const interest = amount * (rate / 100) * duration;
+                const totalAdd = adminFees + interest + autoPenalty + manualPenalty;
+                const gTotal = amount + totalAdd;
+                const balance = Math.max(gTotal - remitted, 0);
+
                 await db.collection('loans').doc(this.editingLoan.id).update({
                     names: this.editFormData.names,
-                    date: firebase.firestore.Timestamp.fromDate(new Date(this.editFormData.date)),
-                    amount: Number(this.editFormData.amount),
-                    int_rate: Number(this.editFormData.int_rate),
-                    duration: Number(this.editFormData.duration),
-                    admin_fees: Number(this.editFormData.admin_fees),
-                    amt_remitted: Number(this.editFormData.amt_remitted),
-                    interest: fields.interest,
-                    penalty_charged: penalty,
-                    total: fields.totalAdd,
-                    g_total: fields.gTotal,
+                    date: firebase.firestore.Timestamp.fromDate(loanDate),
+                    amount: amount,
+                    int_rate: rate,
+                    duration: duration,
+                    admin_fees: adminFees,
+                    amt_remitted: remitted,
+                    interest: interest,
+                    auto_penalty: autoPenalty,
+                    manual_penalty: manualPenalty,
+                    total: totalAdd,
+                    g_total: gTotal,
                     balance: balance
                 });
                 showToast('Loan updated');

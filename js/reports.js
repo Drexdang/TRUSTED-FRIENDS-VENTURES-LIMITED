@@ -69,10 +69,20 @@ document.addEventListener('alpine:init', () => {
             const filteredIncome = filterByDate(this.income);
             const filteredEquity = filterByDate(this.equityTransactions);
 
+            // Calculate total penalty income: sum of auto_penalty + manual_penalty (or old penalty_charged)
+            const totalPenalty = filteredLoans.reduce((sum, loan) => {
+                // New fields
+                const auto = loan.auto_penalty || 0;
+                const manual = loan.manual_penalty || 0;
+                // Old field for backward compatibility
+                const oldPenalty = loan.penalty_charged || 0;
+                return sum + auto + manual + oldPenalty;
+            }, 0);
+
             const revenue = {
                 interest: filteredLoans.reduce((s, l) => s + (l.interest || 0), 0),
                 adminFees: filteredLoans.reduce((s, l) => s + (l.admin_fees || 0), 0),
-                penalty: filteredLoans.reduce((s, l) => s + (l.penalty_charged || 0), 0)
+                penalty: totalPenalty   // combined penalty income
             };
 
             const otherIncome = {};
@@ -115,14 +125,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         downloadPLPDF() {
-            // Ensure data is computed
-            if (!this.plData) {
-                this.computePL();
-            }
-            if (!this.plData) {
-                showToast('No data to generate PDF', 'error');
-                return;
-            }
+            if (!this.plData) this.computePL();
+            if (!this.plData) return;
             const periodText = this.period === 'all' ? 'All Time' :
                                this.period === 'year' ? 'This Year' :
                                this.period === '12months' ? 'Last 12 Months' :
@@ -131,9 +135,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         downloadPLCSV() {
-            if (!this.plData) {
-                this.computePL();
-            }
+            if (!this.plData) this.computePL();
             if (!this.plData) return;
             const flat = {
                 Period: this.period,
