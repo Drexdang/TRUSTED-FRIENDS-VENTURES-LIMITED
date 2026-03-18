@@ -175,8 +175,8 @@
                         <th>Interest</th>
                         <th>Auto Penalty</th>
                         <th>Manual Penalty</th>
+                        <th>Paid</th>          <!-- Paid moved before Total -->
                         <th>Total</th>
-                        <th>Paid</th>
                         <th>Balance</th>
                         <th>Actions</th>
                     </tr>
@@ -194,9 +194,9 @@
                             <td x-text="formatCurrency(loan.interest)"></td>
                             <td x-text="formatCurrency(loan.auto_penalty || 0)"></td>
                             <td x-text="formatCurrency(loan.manual_penalty || 0)"></td>
-                            <td x-text="formatCurrency(loan.g_total)"></td>
-                            <td x-text="formatCurrency(loan.amt_remitted)"></td>
-                            <td x-text="formatCurrency(loan.balance)"></td>
+                            <td x-text="formatCurrency(loan.amt_remitted)"></td>   <!-- Paid -->
+                            <td x-text="formatCurrency(loan.g_total)"></td>        <!-- Total -->
+                            <td x-text="formatCurrency(loan.balance)"></td>        <!-- Balance -->
                             <td>
                                 <button @click="editLoan(loan)" class="text-indigo-600 mr-2">Edit</button>
                                 <button @click="deleteLoan(loan)" class="text-red-600">Delete</button>
