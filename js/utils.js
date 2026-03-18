@@ -34,14 +34,16 @@ function monthsOverdueSince(loanDate, durationMonths, cutoffDate = new Date(2026
     return Math.floor(diffDays / 30);
 }
 
-// Original function (now uses new overdue calculation)
+// Auto penalty based on outstanding balance (provisional) and overdue months
 function calculateLoanFields(amount, rate, duration, adminFees, remitted, loanDate) {
     const interest = amount * (rate / 100) * duration;
-    const overdueMonths = monthsOverdueSince(loanDate, duration);
-    let autoPenalty = amount * 0.10 * overdueMonths;
-
-    const provisional = amount + adminFees + interest - remitted;
-    if (provisional <= 0) autoPenalty = 0;
+    // Balance before penalty: amount + interest + fees - paid
+    const provisionalBalance = amount + adminFees + interest - remitted;
+    let autoPenalty = 0;
+    if (provisionalBalance > 0) {
+        const overdueMonths = monthsOverdueSince(loanDate, duration);
+        autoPenalty = provisionalBalance * 0.10 * overdueMonths;
+    }
 
     const totalAdd = adminFees + interest + autoPenalty;
     const gTotal = amount + totalAdd;
@@ -56,7 +58,7 @@ function calculateLoanFields(amount, rate, duration, adminFees, remitted, loanDa
     };
 }
 
-// Keep old name for backward compatibility (if needed)
+// Keep old name for backward compatibility
 function monthsOverdue(loanDate, duration) {
     return monthsOverdueSince(loanDate, duration);
 }
