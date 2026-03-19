@@ -12,6 +12,19 @@ document.addEventListener('alpine:init', () => {
         endDate: new Date().toISOString().split('T')[0],
         plData: null,
 
+        drillDownData: null,
+        drillDownTitle: '',
+        showDrillDown: false,
+
+        outstandingList: [],
+        selectedOutstandingClient: null,
+        showOutstandingDetail: false,
+
+        // NEW: Computed property for total outstanding amount
+        get totalOutstandingAmount() {
+            return this.outstandingList.reduce((sum, client) => sum + client.totalBalance, 0);
+        },
+
         init() {
             this.loadData();
             db.collection('loans').onSnapshot(snap => this.loans = snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -51,6 +64,42 @@ document.addEventListener('alpine:init', () => {
             downloadCSV(data, `loan_${this.selectedLoan.sn}.csv`);
         },
 
+        loadOutstanding() {
+            const outstanding = {};
+            this.loans.forEach(loan => {
+                if (loan.balance > 0) {
+                    if (!outstanding[loan.names]) {
+                        outstanding[loan.names] = {
+                            name: loan.names,
+                            totalBalance: 0,
+                            loans: []
+                        };
+                    }
+                    outstanding[loan.names].totalBalance += loan.balance;
+                    outstanding[loan.names].loans.push(loan);
+                }
+            });
+            this.outstandingList = Object.values(outstanding).sort((a, b) => b.totalBalance - a.totalBalance);
+        },
+
+        viewOutstandingClient(client) {
+            this.selectedOutstandingClient = client;
+            this.showOutstandingDetail = true;
+        },
+
+        printOutstandingClientStatement() {
+            if (!this.selectedOutstandingClient) return;
+            generateClientOutstandingPDF(this.selectedOutstandingClient);
+        },
+
+        printAllOutstanding() {
+            if (this.outstandingList.length === 0) {
+                showToast('No outstanding balances to print', 'error');
+                return;
+            }
+            generateAllOutstandingPDF(this.outstandingList);
+        },
+
         computePL() {
             const filterByDate = (items) => {
                 if (this.period === 'all') return items;
@@ -69,12 +118,9 @@ document.addEventListener('alpine:init', () => {
             const filteredIncome = filterByDate(this.income);
             const filteredEquity = filterByDate(this.equityTransactions);
 
-            // Calculate total penalty income: sum of auto_penalty + manual_penalty (or old penalty_charged)
             const totalPenalty = filteredLoans.reduce((sum, loan) => {
-                // New fields
                 const auto = loan.auto_penalty || 0;
                 const manual = loan.manual_penalty || 0;
-                // Old field for backward compatibility
                 const oldPenalty = loan.penalty_charged || 0;
                 return sum + auto + manual + oldPenalty;
             }, 0);
@@ -82,7 +128,7 @@ document.addEventListener('alpine:init', () => {
             const revenue = {
                 interest: filteredLoans.reduce((s, l) => s + (l.interest || 0), 0),
                 adminFees: filteredLoans.reduce((s, l) => s + (l.admin_fees || 0), 0),
-                penalty: totalPenalty   // combined penalty income
+                penalty: totalPenalty
             };
 
             const otherIncome = {};
@@ -119,9 +165,82 @@ document.addEventListener('alpine:init', () => {
                 equityPerOwner: equitySummary,
                 totalEquity: totalNetEquity,
                 netOperating,
-                finalPosition
+                finalPosition,
+                rawLoans: filteredLoans,
+                rawExpenses: filteredExpenses,
+                rawIncome: filteredIncome
             };
             return this.plData;
+        },
+
+        showInterestDetails() {
+            if (!this.plData) this.computePL();
+            this.drillDownData = this.plData.rawLoans.map(l => ({
+                sn: l.sn,
+                names: l.names,
+                amount: l.interest,
+                date: l.date?.toDate().toLocaleDateString()
+            })).filter(l => l.amount > 0);
+            this.drillDownTitle = 'Interest Income Details';
+            this.showDrillDown = true;
+        },
+
+        showAdminFeesDetails() {
+            if (!this.plData) this.computePL();
+            this.drillDownData = this.plData.rawLoans.map(l => ({
+                sn: l.sn,
+                names: l.names,
+                amount: l.admin_fees,
+                date: l.date?.toDate().toLocaleDateString()
+            })).filter(l => l.amount > 0);
+            this.drillDownTitle = 'Admin Fees Details';
+            this.showDrillDown = true;
+        },
+
+        showPenaltyDetails() {
+            if (!this.plData) this.computePL();
+            this.drillDownData = this.plData.rawLoans.map(l => ({
+                sn: l.sn,
+                names: l.names,
+                amount: (l.auto_penalty || 0) + (l.manual_penalty || 0) + (l.penalty_charged || 0),
+                auto: l.auto_penalty || 0,
+                manual: l.manual_penalty || 0,
+                date: l.date?.toDate().toLocaleDateString()
+            })).filter(l => l.amount > 0);
+            this.drillDownTitle = 'Penalty Income Details';
+            this.showDrillDown = true;
+        },
+
+        showOtherIncomeDetails(category) {
+            if (!this.plData) this.computePL();
+            this.drillDownData = this.plData.rawIncome
+                .filter(inc => inc.category === category)
+                .map(inc => ({
+                    category: inc.category,
+                    amount: inc.amount,
+                    date: inc.date?.toDate().toLocaleDateString(),
+                    description: inc.description
+                }));
+            this.drillDownTitle = `Other Income: ${category}`;
+            this.showDrillDown = true;
+        },
+
+        showExpenseDetails(category) {
+            if (!this.plData) this.computePL();
+            this.drillDownData = this.plData.rawExpenses
+                .filter(exp => exp.category === category)
+                .map(exp => ({
+                    category: exp.category,
+                    amount: exp.amount,
+                    date: exp.date?.toDate().toLocaleDateString(),
+                    description: exp.description
+                }));
+            this.drillDownTitle = `Expenses: ${category}`;
+            this.showDrillDown = true;
+        },
+
+        printDrillDown() {
+            downloadCSV(this.drillDownData, `${this.drillDownTitle.replace(/\s/g, '_')}.csv`);
         },
 
         downloadPLPDF() {

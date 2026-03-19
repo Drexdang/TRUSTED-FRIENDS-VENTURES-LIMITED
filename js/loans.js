@@ -4,6 +4,7 @@ document.addEventListener('alpine:init', () => {
         search: '',
         showAddForm: false,
         showEditForm: false,
+        showAll: false,
         editingLoan: null,
         formData: {
             names: '',
@@ -13,24 +14,56 @@ document.addEventListener('alpine:init', () => {
             duration: 3,
             admin_fees: 0,
             amt_remitted: 0,
-            manual_penalty: 0   // renamed from extra_penalty
+            manual_penalty: 0
         },
         editFormData: {},
+        // Autocomplete properties
+        nameSuggestions: [],
+        showSuggestions: false,
+        filteredNames: [],
+
         init() {
             this.loadLoans();
             db.collection('loans').orderBy('sn', 'asc').onSnapshot(snapshot => {
                 this.loans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // Update suggestions list when loans change
+                this.nameSuggestions = [...new Set(this.loans.map(l => l.names).filter(Boolean))];
             });
         },
         async loadLoans() {
             const snapshot = await db.collection('loans').orderBy('sn', 'asc').get();
             this.loans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            this.nameSuggestions = [...new Set(this.loans.map(l => l.names).filter(Boolean))];
         },
         get filteredLoans() {
             const term = this.search.toLowerCase();
-            return this.loans.filter(l => 
+            const filtered = this.loans.filter(l => 
                 l.names?.toLowerCase().includes(term) || l.sn?.toString().includes(term)
             );
+            filtered.sort((a, b) => {
+                const dateA = a.date ? new Date(a.date.seconds * 1000) : new Date(0);
+                const dateB = b.date ? new Date(b.date.seconds * 1000) : new Date(0);
+                return dateB - dateA;
+            });
+            return filtered;
+        },
+        get displayedLoans() {
+            const filtered = this.filteredLoans;
+            return this.showAll ? filtered : filtered.slice(0, 5);
+        },
+        filterNames() {
+            const input = this.formData.names.toLowerCase();
+            this.filteredNames = this.nameSuggestions.filter(name => 
+                name.toLowerCase().includes(input) && name.toLowerCase() !== input
+            ).slice(0, 10);
+        },
+        selectName(name) {
+            this.formData.names = name;
+            this.showSuggestions = false;
+        },
+        resetAutocomplete() {
+            this.filteredNames = [];
+            this.showSuggestions = false;
         },
         resetForm() {
             this.formData = {
@@ -59,8 +92,12 @@ document.addEventListener('alpine:init', () => {
                 const totalAdd = fields.totalAdd + manualPenalty;
                 const gTotal = fields.gTotal + manualPenalty;
                 const balance = Math.max(gTotal - remitted, 0);
+                let overpayment = 0;
+                if (remitted > gTotal) {
+                    overpayment = remitted - gTotal;
+                }
 
-                await db.collection('loans').add({
+                const docRef = await db.collection('loans').add({
                     sn: nextSN,
                     names: this.formData.names,
                     date: firebase.firestore.Timestamp.fromDate(loanDate),
@@ -71,11 +108,24 @@ document.addEventListener('alpine:init', () => {
                     amt_remitted: remitted,
                     interest: fields.interest,
                     auto_penalty: fields.autoPenalty,
-                    manual_penalty: manualPenalty,   // saved as manual_penalty
+                    manual_penalty: manualPenalty,
                     total: totalAdd,
                     g_total: gTotal,
-                    balance: balance
+                    balance: balance,
+                    overpayment: overpayment  // store overpayment amount
                 });
+
+                if (overpayment > 0) {
+                    await db.collection('otherIncome').add({
+                        category: 'Loan Overpayment',
+                        amount: overpayment,
+                        date: firebase.firestore.Timestamp.fromDate(loanDate),
+                        description: `Overpayment on loan SN ${nextSN} - ${this.formData.names}`
+                    });
+                    showToast(`Overpayment of ${formatCurrency(overpayment)} recorded as other income`);
+                }
+
+                await logAudit('CREATE', 'loans', docRef.id, { sn: nextSN, names: this.formData.names });
                 showToast('Loan added successfully');
                 this.showAddForm = false;
                 this.resetForm();
@@ -94,7 +144,7 @@ document.addEventListener('alpine:init', () => {
                 admin_fees: loan.admin_fees,
                 amt_remitted: loan.amt_remitted,
                 auto_penalty: loan.auto_penalty || 0,
-                manual_penalty: loan.manual_penalty || 0   // load manual_penalty
+                manual_penalty: loan.manual_penalty || 0
             };
             this.showEditForm = true;
         },
@@ -113,6 +163,10 @@ document.addEventListener('alpine:init', () => {
                 const totalAdd = adminFees + interest + autoPenalty + manualPenalty;
                 const gTotal = amount + totalAdd;
                 const balance = Math.max(gTotal - remitted, 0);
+                let overpayment = 0;
+                if (remitted > gTotal) {
+                    overpayment = remitted - gTotal;
+                }
 
                 await db.collection('loans').doc(this.editingLoan.id).update({
                     names: this.editFormData.names,
@@ -127,8 +181,21 @@ document.addEventListener('alpine:init', () => {
                     manual_penalty: manualPenalty,
                     total: totalAdd,
                     g_total: gTotal,
-                    balance: balance
+                    balance: balance,
+                    overpayment: overpayment
                 });
+
+                if (overpayment > 0) {
+                    await db.collection('otherIncome').add({
+                        category: 'Loan Overpayment',
+                        amount: overpayment,
+                        date: firebase.firestore.Timestamp.fromDate(loanDate),
+                        description: `Overpayment on loan SN ${this.editingLoan.sn} - ${this.editFormData.names}`
+                    });
+                    showToast(`Overpayment of ${formatCurrency(overpayment)} recorded as other income`);
+                }
+
+                await logAudit('UPDATE', 'loans', this.editingLoan.id, { sn: this.editingLoan.sn, changes: this.editFormData });
                 showToast('Loan updated');
                 this.showEditForm = false;
                 this.editingLoan = null;
@@ -140,6 +207,7 @@ document.addEventListener('alpine:init', () => {
             if (!confirm(`Are you sure you want to delete loan SN ${loan.sn} – ${loan.names}?`)) return;
             try {
                 await db.collection('loans').doc(loan.id).delete();
+                await logAudit('DELETE', 'loans', loan.id, { sn: loan.sn, names: loan.names });
                 showToast('Loan deleted');
             } catch (error) {
                 showToast('Delete failed: ' + error.message, 'error');

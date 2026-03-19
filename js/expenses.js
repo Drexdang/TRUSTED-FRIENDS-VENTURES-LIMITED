@@ -13,11 +13,13 @@ document.addEventListener('alpine:init', () => {
             date: new Date().toISOString().split('T')[0],
             description: ''
         },
+        editingExpense: null,
+        editingIncome: null,
+        showExpenseEditModal: false,
+        showIncomeEditModal: false,
         owners: [],
-        // For individual owner detail view
         selectedOwner: null,
         showOwnerDetail: false,
-        // For editing a transaction
         editingTransaction: null,
         editForm: {
             owner: '',
@@ -70,6 +72,7 @@ document.addEventListener('alpine:init', () => {
             this.equityTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         },
 
+        // Expense methods
         async addExpense() {
             try {
                 await db.collection('expenses').add({
@@ -85,6 +88,46 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        editExpense(exp) {
+            this.editingExpense = exp;
+            this.expenseForm = {
+                category: exp.category,
+                amount: exp.amount,
+                date: exp.date ? new Date(exp.date.seconds * 1000).toISOString().split('T')[0] : '',
+                description: exp.description || ''
+            };
+            this.showExpenseEditModal = true;
+        },
+
+        async updateExpense() {
+            if (!this.editingExpense) return;
+            try {
+                await db.collection('expenses').doc(this.editingExpense.id).update({
+                    category: this.expenseForm.category,
+                    amount: Number(this.expenseForm.amount),
+                    date: firebase.firestore.Timestamp.fromDate(new Date(this.expenseForm.date)),
+                    description: this.expenseForm.description
+                });
+                showToast('Expense updated');
+                this.showExpenseEditModal = false;
+                this.editingExpense = null;
+                this.expenseForm = { category: '', amount: '', date: new Date().toISOString().split('T')[0], description: '' };
+            } catch (error) {
+                showToast('Error: ' + error.message, 'error');
+            }
+        },
+
+        async deleteExpense(exp) {
+            if (!confirm('Delete this expense?')) return;
+            try {
+                await db.collection('expenses').doc(exp.id).delete();
+                showToast('Expense deleted');
+            } catch (error) {
+                showToast('Error: ' + error.message, 'error');
+            }
+        },
+
+        // Income methods
         async addIncome() {
             try {
                 await db.collection('otherIncome').add({
@@ -100,6 +143,46 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        editIncome(inc) {
+            this.editingIncome = inc;
+            this.incomeForm = {
+                category: inc.category,
+                amount: inc.amount,
+                date: inc.date ? new Date(inc.date.seconds * 1000).toISOString().split('T')[0] : '',
+                description: inc.description || ''
+            };
+            this.showIncomeEditModal = true;
+        },
+
+        async updateIncome() {
+            if (!this.editingIncome) return;
+            try {
+                await db.collection('otherIncome').doc(this.editingIncome.id).update({
+                    category: this.incomeForm.category,
+                    amount: Number(this.incomeForm.amount),
+                    date: firebase.firestore.Timestamp.fromDate(new Date(this.incomeForm.date)),
+                    description: this.incomeForm.description
+                });
+                showToast('Income updated');
+                this.showIncomeEditModal = false;
+                this.editingIncome = null;
+                this.incomeForm = { category: '', amount: '', date: new Date().toISOString().split('T')[0], description: '' };
+            } catch (error) {
+                showToast('Error: ' + error.message, 'error');
+            }
+        },
+
+        async deleteIncome(inc) {
+            if (!confirm('Delete this income record?')) return;
+            try {
+                await db.collection('otherIncome').doc(inc.id).delete();
+                showToast('Income deleted');
+            } catch (error) {
+                showToast('Error: ' + error.message, 'error');
+            }
+        },
+
+        // Equity methods
         async addEquityTransaction() {
             if (!this.equityForm.owner || !this.equityForm.amount || Number(this.equityForm.amount) <= 0) {
                 showToast('Please select owner and enter a positive amount', 'error');
@@ -126,26 +209,22 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // View individual owner details
         viewOwner(owner) {
             this.selectedOwner = owner;
             this.showOwnerDetail = true;
         },
 
-        // Filter transactions for selected owner
         get ownerTransactions() {
             if (!this.selectedOwner) return [];
             return this.equityTransactions.filter(t => t.owner === this.selectedOwner);
         },
 
-        // Cumulative for selected owner
         get ownerNet() {
             return this.ownerTransactions.reduce((sum, t) => {
                 return sum + (t.type === 'contribution' ? t.amount : -t.amount);
             }, 0);
         },
 
-        // Edit transaction
         editTransaction(tx) {
             this.editingTransaction = tx;
             this.editForm = {
@@ -186,13 +265,11 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // Print individual owner statement
         printOwnerStatement() {
             if (!this.selectedOwner) return;
             generateOwnerEquityPDF(this.selectedOwner, this.ownerTransactions, this.ownerNet);
         },
 
-        // Equity summary for all owners
         get equitySummary() {
             const summary = {};
             this.owners.forEach(owner => { summary[owner] = 0; });

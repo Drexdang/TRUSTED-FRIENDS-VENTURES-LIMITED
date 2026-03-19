@@ -32,24 +32,38 @@
     <script src="js/app.js"></script>
     <style>
         #toast { transition: opacity 0.3s; }
-        /* Ensure charts have a fixed height */
         canvas { max-height: 400px; width: 100%; }
         .chart-container { height: 400px; }
-        /* Mobile-friendly table scrolling */
         .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+        .autocomplete-items {
+            position: absolute;
+            border: 1px solid #d4d4d4;
+            border-bottom: none;
+            border-top: none;
+            z-index: 99;
+            top: 100%;
+            left: 0;
+            right: 0;
+        }
+        .autocomplete-items div {
+            padding: 10px;
+            cursor: pointer;
+            background-color: #fff;
+            border-bottom: 1px solid #d4d4d4;
+        }
+        .autocomplete-items div:hover {
+            background-color: #e9e9e9;
+        }
     </style>
 </head>
 <body class="bg-gray-100" x-data="app" x-init="init">
-    <!-- Toast container -->
     <div id="toast" class="hidden fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg text-white"></div>
 
-    <!-- Navigation Bar (visible when logged in) -->
+    <!-- Navigation Bar -->
     <nav class="bg-indigo-600 text-white p-4 shadow-lg" x-show="user">
         <div class="container mx-auto">
-            <!-- Top row: logo and logout (mobile: column) -->
             <div class="flex flex-col md:flex-row md:justify-between md:items-center space-y-2 md:space-y-0">
                 <div class="flex items-center space-x-2">
-                    <!-- Logo -->
                     <img src="logo.jpg" alt="Logo" class="h-10 w-auto" onerror="this.style.display='none'">
                     <div>
                         <h1 class="text-2xl font-bold">💰 Trusted Friends Loan Manager</h1>
@@ -58,7 +72,6 @@
                 </div>
                 <button @click="logout" class="bg-red-500 px-3 py-1 rounded hover:bg-red-600 self-start md:self-auto">Logout</button>
             </div>
-            <!-- Navigation buttons: wrap on mobile -->
             <div class="flex flex-wrap gap-2 mt-2">
                 <button @click="page='dashboard'" class="hover:underline px-2 py-1" :class="{'font-bold bg-indigo-700 rounded': page==='dashboard'}">Dashboard</button>
                 <button @click="page='loans'" class="hover:underline px-2 py-1" :class="{'font-bold bg-indigo-700 rounded': page==='loans'}">Loans</button>
@@ -94,7 +107,6 @@
         <template x-if="page === 'dashboard'">
             <div x-data="dashboard" x-init="init" class="space-y-6">
                 <h1 class="text-3xl font-bold">Dashboard</h1>
-                <!-- KPI cards: stack on mobile, grid on larger -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div class="bg-white p-4 rounded shadow">
                         <p class="text-gray-600">Total Principal</p>
@@ -114,7 +126,6 @@
                         <p class="text-2xl font-bold" x-text="formatCurrency(totalPaid)"></p>
                     </div>
                 </div>
-                <!-- Charts: stack on mobile, two columns on large -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-white p-4 rounded shadow chart-container">
                         <h2 class="text-xl font-semibold mb-2">Balance Trend</h2>
@@ -132,119 +143,134 @@
             </div>
         </template>
 
-       <!-- Loans Page -->
-<template x-if="page === 'loans'">
-    <div x-data="loans" x-init="init" class="space-y-6">
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-            <h1 class="text-3xl font-bold">Loan Records</h1>
-            <button @click="showAddForm = !showAddForm" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 w-full sm:w-auto">
-                <span x-text="showAddForm ? 'Cancel' : '+ Add Loan'"></span>
-            </button>
-        </div>
-        <!-- Add Form -->
-        <div x-show="showAddForm" class="bg-white p-6 rounded shadow">
-            <h2 class="text-xl font-bold mb-4">New Loan</h2>
-            <form @submit.prevent="addLoan">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><label class="block">Client Name *</label><input type="text" x-model="formData.names" class="w-full border p-2 rounded" required></div>
-                    <div><label class="block">Date</label><input type="date" x-model="formData.date" class="w-full border p-2 rounded"></div>
-                    <div><label class="block">Amount (₦)</label><input type="number" step="0.01" x-model="formData.amount" class="w-full border p-2 rounded" required></div>
-                    <div><label class="block">Interest Rate %</label><input type="number" step="0.01" x-model="formData.int_rate" class="w-full border p-2 rounded"></div>
-                    <div><label class="block">Duration (months)</label><input type="number" step="1" x-model="formData.duration" class="w-full border p-2 rounded"></div>
-                    <div><label class="block">Admin Fees (₦)</label><input type="number" step="0.01" x-model="formData.admin_fees" class="w-full border p-2 rounded"></div>
-                    <div><label class="block">Already Paid (₦)</label><input type="number" step="0.01" x-model="formData.amt_remitted" class="w-full border p-2 rounded"></div>
-                    <!-- Manual Penalty field -->
-                    <div><label class="block">Manual Penalty (₦)</label><input type="number" step="0.01" x-model="formData.manual_penalty" class="w-full border p-2 rounded"></div>
+        <!-- Loans Page (with autocomplete) -->
+        <template x-if="page === 'loans'">
+            <div x-data="loans" x-init="init" class="space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                    <h1 class="text-3xl font-bold">Loan Records</h1>
+                    <button @click="showAddForm = !showAddForm; resetAutocomplete()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 w-full sm:w-auto">
+                        <span x-text="showAddForm ? 'Cancel' : '+ Add Loan'"></span>
+                    </button>
                 </div>
-                <button type="submit" class="mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 w-full sm:w-auto">Save Loan</button>
-            </form>
-        </div>
-        <div><input type="text" placeholder="Search by name or SN" x-model="search" class="w-full md:w-1/3 border p-2 rounded"></div>
-        <!-- Loans Table -->
-        <div class="bg-white rounded shadow overflow-x-auto">
-            <table class="min-w-full">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-4 py-2 text-left">SN</th>
-                        <th>Name</th>
-                        <th>Date</th>
-                        <th>Amount</th>
-                        <th>Rate</th>
-                        <th>Dur</th>
-                        <th>Admin</th>
-                        <th>Interest</th>
-                        <th>Auto Penalty</th>
-                        <th>Manual Penalty</th>
-                        <th>Paid</th>          <!-- Paid moved before Total -->
-                        <th>Total</th>
-                        <th>Balance</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template x-for="loan in filteredLoans" :key="loan.id">
-                        <tr class="border-t">
-                            <td class="px-4 py-2" x-text="loan.sn"></td>
-                            <td x-text="loan.names"></td>
-                            <td x-text="loan.date ? new Date(loan.date.seconds*1000).toLocaleDateString() : ''"></td>
-                            <td x-text="formatCurrency(loan.amount)"></td>
-                            <td x-text="loan.int_rate + '%'"></td>
-                            <td x-text="loan.duration"></td>
-                            <td x-text="formatCurrency(loan.admin_fees)"></td>
-                            <td x-text="formatCurrency(loan.interest)"></td>
-                            <td x-text="formatCurrency(loan.auto_penalty || 0)"></td>
-                            <td x-text="formatCurrency(loan.manual_penalty || 0)"></td>
-                            <td x-text="formatCurrency(loan.amt_remitted)"></td>   <!-- Paid -->
-                            <td x-text="formatCurrency(loan.g_total)"></td>        <!-- Total -->
-                            <td x-text="formatCurrency(loan.balance)"></td>        <!-- Balance -->
-                            <td>
-                                <button @click="editLoan(loan)" class="text-indigo-600 mr-2">Edit</button>
-                                <button @click="deleteLoan(loan)" class="text-red-600">Delete</button>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-        </div>
-        <!-- Edit Modal -->
-        <div x-show="showEditForm" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-            <div class="bg-white rounded-lg p-6 max-w-2xl w-full">
-                <h2 class="text-xl font-bold mb-4">Edit Loan SN <span x-text="editingLoan?.sn"></span></h2>
-                <form @submit.prevent="updateLoan">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div><label>Name</label><input type="text" x-model="editFormData.names" class="w-full border p-2 rounded"></div>
-                        <div><label>Date</label><input type="date" x-model="editFormData.date" class="w-full border p-2 rounded"></div>
-                        <div><label>Amount</label><input type="number" step="0.01" x-model="editFormData.amount" class="w-full border p-2 rounded"></div>
-                        <div><label>Rate %</label><input type="number" step="0.01" x-model="editFormData.int_rate" class="w-full border p-2 rounded"></div>
-                        <div><label>Duration</label><input type="number" step="1" x-model="editFormData.duration" class="w-full border p-2 rounded"></div>
-                        <div><label>Admin Fees</label><input type="number" step="0.01" x-model="editFormData.admin_fees" class="w-full border p-2 rounded"></div>
-                        <div><label>Already Paid</label><input type="number" step="0.01" x-model="editFormData.amt_remitted" class="w-full border p-2 rounded"></div>
-                        <!-- Auto Penalty (editable) -->
-                        <div><label>Auto Penalty (₦)</label><input type="number" step="0.01" x-model="editFormData.auto_penalty" class="w-full border p-2 rounded"></div>
-                        <!-- Manual Penalty (editable) -->
-                        <div><label>Manual Penalty (₦)</label><input type="number" step="0.01" x-model="editFormData.manual_penalty" class="w-full border p-2 rounded"></div>
+                <!-- Add Form -->
+                <div x-show="showAddForm" class="bg-white p-6 rounded shadow relative">
+                    <h2 class="text-xl font-bold mb-4">New Loan</h2>
+                    <form @submit.prevent="addLoan">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Client Name with autocomplete -->
+                            <div class="relative">
+                                <label class="block">Client Name *</label>
+                                <input type="text" x-model="formData.names" @input="filterNames" @focus="showSuggestions = true" @blur="setTimeout(() => showSuggestions = false, 200)" class="w-full border p-2 rounded" required>
+                                <div x-show="showSuggestions && filteredNames.length > 0" class="autocomplete-items absolute bg-white border rounded-b w-full">
+                                    <template x-for="name in filteredNames" :key="name">
+                                        <div @mousedown="selectName(name)" x-text="name"></div>
+                                    </template>
+                                </div>
+                            </div>
+                            <div><label class="block">Date</label><input type="date" x-model="formData.date" class="w-full border p-2 rounded"></div>
+                            <div><label class="block">Amount (₦)</label><input type="number" step="0.01" x-model="formData.amount" class="w-full border p-2 rounded" required></div>
+                            <div><label class="block">Interest Rate %</label><input type="number" step="0.01" x-model="formData.int_rate" class="w-full border p-2 rounded"></div>
+                            <div><label class="block">Duration (months)</label><input type="number" step="1" x-model="formData.duration" class="w-full border p-2 rounded"></div>
+                            <div><label class="block">Admin Fees (₦)</label><input type="number" step="0.01" x-model="formData.admin_fees" class="w-full border p-2 rounded"></div>
+                            <div><label class="block">Already Paid (₦)</label><input type="number" step="0.01" x-model="formData.amt_remitted" class="w-full border p-2 rounded"></div>
+                            <div><label class="block">Manual Penalty (₦)</label><input type="number" step="0.01" x-model="formData.manual_penalty" class="w-full border p-2 rounded"></div>
+                        </div>
+                        <button type="submit" class="mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 w-full sm:w-auto">Save Loan</button>
+                    </form>
+                </div>
+                <div><input type="text" placeholder="Search by name or SN" x-model="search" class="w-full md:w-1/3 border p-2 rounded"></div>
+
+                <!-- Loans Table with displayedLoans and View All -->
+                <div class="bg-white rounded shadow overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left">SN</th>
+                                <th>Name</th>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Rate</th>
+                                <th>Dur</th>
+                                <th>Admin</th>
+                                <th>Interest</th>
+                                <th>Auto Penalty</th>
+                                <th>Manual Penalty</th>
+                                <th>Paid</th>
+                                <th>Total</th>
+                                <th>Balance</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="loan in displayedLoans" :key="loan.id">
+                                <tr class="border-t">
+                                    <td class="px-4 py-2" x-text="loan.sn"></td>
+                                    <td x-text="loan.names"></td>
+                                    <td x-text="loan.date ? new Date(loan.date.seconds*1000).toLocaleDateString() : ''"></td>
+                                    <td x-text="formatCurrency(loan.amount)"></td>
+                                    <td x-text="loan.int_rate + '%'"></td>
+                                    <td x-text="loan.duration"></td>
+                                    <td x-text="formatCurrency(loan.admin_fees)"></td>
+                                    <td x-text="formatCurrency(loan.interest)"></td>
+                                    <td x-text="formatCurrency(loan.auto_penalty || 0)"></td>
+                                    <td x-text="formatCurrency(loan.manual_penalty || 0)"></td>
+                                    <td x-text="formatCurrency(loan.amt_remitted)"></td>
+                                    <td x-text="formatCurrency(loan.g_total)"></td>
+                                    <td x-text="formatCurrency(loan.balance)"></td>
+                                    <td>
+                                        <button @click="editLoan(loan)" class="text-indigo-600 mr-2">Edit</button>
+                                        <button @click="deleteLoan(loan)" class="text-red-600">Delete</button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                    <div class="p-2 text-center" x-show="filteredLoans.length > 5">
+                        <button @click="showAll = !showAll" class="text-indigo-600 hover:underline">
+                            <span x-text="showAll ? 'Show Less' : 'View All ' + filteredLoans.length + ' Records'"></span>
+                        </button>
                     </div>
-                    <div class="mt-4 flex space-x-2">
-                        <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded">Update</button>
-                        <button type="button" @click="showEditForm = false; editingLoan = null" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
+                </div>
+
+                <!-- Edit Loan Modal (updated to show overpayment if any) -->
+                <div x-show="showEditForm" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-lg p-6 max-w-2xl w-full">
+                        <h2 class="text-xl font-bold mb-4">Edit Loan SN <span x-text="editingLoan?.sn"></span></h2>
+                        <div x-show="editingLoan?.overpayment" class="mb-2 p-2 bg-yellow-100 text-yellow-800 rounded">
+                            Overpayment of <span x-text="formatCurrency(editingLoan.overpayment)"></span> was recorded as other income.
+                        </div>
+                        <form @submit.prevent="updateLoan">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div><label>Name</label><input type="text" x-model="editFormData.names" class="w-full border p-2 rounded"></div>
+                                <div><label>Date</label><input type="date" x-model="editFormData.date" class="w-full border p-2 rounded"></div>
+                                <div><label>Amount</label><input type="number" step="0.01" x-model="editFormData.amount" class="w-full border p-2 rounded"></div>
+                                <div><label>Rate %</label><input type="number" step="0.01" x-model="editFormData.int_rate" class="w-full border p-2 rounded"></div>
+                                <div><label>Duration</label><input type="number" step="1" x-model="editFormData.duration" class="w-full border p-2 rounded"></div>
+                                <div><label>Admin Fees</label><input type="number" step="0.01" x-model="editFormData.admin_fees" class="w-full border p-2 rounded"></div>
+                                <div><label>Already Paid</label><input type="number" step="0.01" x-model="editFormData.amt_remitted" class="w-full border p-2 rounded"></div>
+                                <div><label>Auto Penalty (₦)</label><input type="number" step="0.01" x-model="editFormData.auto_penalty" class="w-full border p-2 rounded"></div>
+                                <div><label>Manual Penalty (₦)</label><input type="number" step="0.01" x-model="editFormData.manual_penalty" class="w-full border p-2 rounded"></div>
+                            </div>
+                            <div class="mt-4 flex space-x-2">
+                                <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded">Update</button>
+                                <button type="button" @click="showEditForm = false; editingLoan = null" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
+                            </div>
+                        </form>
                     </div>
-                </form>
+                </div>
             </div>
-        </div>
-    </div>
-</template>
+        </template>
 
         <!-- Expenses & Income & Equity Page -->
         <template x-if="page === 'expenses'">
             <div x-data="expenses" x-init="init" class="space-y-6">
                 <h1 class="text-3xl font-bold">Expenses, Income & Equity</h1>
-                <!-- Tab buttons: wrap on mobile -->
                 <div class="flex flex-wrap space-x-4 border-b">
                     <button @click="activeTab='expenses'" :class="{'font-bold border-b-2 border-indigo-600': activeTab==='expenses'}" class="pb-2 px-4">Expenses</button>
                     <button @click="activeTab='income'" :class="{'font-bold border-b-2 border-indigo-600': activeTab==='income'}" class="pb-2 px-4">Other Income</button>
                     <button @click="activeTab='equity'" :class="{'font-bold border-b-2 border-indigo-600': activeTab==='equity'}" class="pb-2 px-4">Equity</button>
                 </div>
-                
+
                 <!-- Expenses Tab -->
                 <div x-show="activeTab === 'expenses'">
                     <form @submit.prevent="addExpense" class="bg-white p-4 rounded shadow mb-4 grid grid-cols-1 md:grid-cols-5 gap-2">
@@ -263,16 +289,25 @@
                     </form>
                     <div class="bg-white rounded shadow overflow-x-auto">
                         <table class="min-w-full">
-                            <thead><tr><th>Category</th><th>Amount</th><th>Date</th><th>Description</th></tr></thead>
+                            <thead><tr><th>Category</th><th>Amount</th><th>Date</th><th>Description</th><th>Actions</th></tr></thead>
                             <tbody>
                                 <template x-for="exp in expenses" :key="exp.id">
-                                    <tr><td x-text="exp.category"></td><td x-text="formatCurrency(exp.amount)"></td><td x-text="exp.date?.toDate().toLocaleDateString()"></td><td x-text="exp.description"></td></tr>
+                                    <tr>
+                                        <td x-text="exp.category"></td>
+                                        <td x-text="formatCurrency(exp.amount)"></td>
+                                        <td x-text="exp.date?.toDate().toLocaleDateString()"></td>
+                                        <td x-text="exp.description"></td>
+                                        <td>
+                                            <button @click="editExpense(exp)" class="text-indigo-600 mr-2">Edit</button>
+                                            <button @click="deleteExpense(exp)" class="text-red-600">Delete</button>
+                                        </td>
+                                    </tr>
                                 </template>
                             </tbody>
                         </table>
                     </div>
                 </div>
-                
+
                 <!-- Income Tab -->
                 <div x-show="activeTab === 'income'">
                     <form @submit.prevent="addIncome" class="bg-white p-4 rounded shadow mb-4 grid grid-cols-1 md:grid-cols-5 gap-2">
@@ -291,17 +326,26 @@
                     </form>
                     <div class="bg-white rounded shadow overflow-x-auto">
                         <table class="min-w-full">
-                            <thead><tr><th>Category</th><th>Amount</th><th>Date</th><th>Description</th></tr></thead>
+                            <thead><tr><th>Category</th><th>Amount</th><th>Date</th><th>Description</th><th>Actions</th></tr></thead>
                             <tbody>
                                 <template x-for="inc in otherIncome" :key="inc.id">
-                                    <tr><td x-text="inc.category"></td><td x-text="formatCurrency(inc.amount)"></td><td x-text="inc.date?.toDate().toLocaleDateString()"></td><td x-text="inc.description"></td></tr>
+                                    <tr>
+                                        <td x-text="inc.category"></td>
+                                        <td x-text="formatCurrency(inc.amount)"></td>
+                                        <td x-text="inc.date?.toDate().toLocaleDateString()"></td>
+                                        <td x-text="inc.description"></td>
+                                        <td>
+                                            <button @click="editIncome(inc)" class="text-indigo-600 mr-2">Edit</button>
+                                            <button @click="deleteIncome(inc)" class="text-red-600">Delete</button>
+                                        </td>
+                                    </tr>
                                 </template>
                             </tbody>
                         </table>
                     </div>
                 </div>
-                
-                <!-- Equity Tab -->
+
+                <!-- Equity Tab (unchanged) -->
                 <div x-show="activeTab === 'equity'">
                     <!-- Add transaction form -->
                     <form @submit.prevent="addEquityTransaction" class="bg-white p-4 rounded shadow mb-4 grid grid-cols-1 md:grid-cols-6 gap-2">
@@ -434,17 +478,94 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Edit Expense Modal -->
+                <div x-show="showExpenseEditModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-lg p-6 max-w-md w-full">
+                        <h2 class="text-xl font-bold mb-4">Edit Expense</h2>
+                        <form @submit.prevent="updateExpense">
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="block">Category</label>
+                                    <select x-model="expenseForm.category" class="w-full border p-2 rounded" required>
+                                        <option>Allowances</option>
+                                        <option>Social Support</option>
+                                        <option>Administrative Expenses</option>
+                                        <option>Drawings</option>
+                                        <option>Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block">Amount (₦)</label>
+                                    <input type="number" step="0.01" x-model="expenseForm.amount" class="w-full border p-2 rounded" required>
+                                </div>
+                                <div>
+                                    <label class="block">Date</label>
+                                    <input type="date" x-model="expenseForm.date" class="w-full border p-2 rounded" required>
+                                </div>
+                                <div>
+                                    <label class="block">Description</label>
+                                    <input type="text" x-model="expenseForm.description" class="w-full border p-2 rounded">
+                                </div>
+                            </div>
+                            <div class="mt-4 flex space-x-2">
+                                <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded">Update</button>
+                                <button type="button" @click="showExpenseEditModal = false; editingExpense = null" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Edit Income Modal -->
+                <div x-show="showIncomeEditModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-lg p-6 max-w-md w-full">
+                        <h2 class="text-xl font-bold mb-4">Edit Income</h2>
+                        <form @submit.prevent="updateIncome">
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="block">Category</label>
+                                    <select x-model="incomeForm.category" class="w-full border p-2 rounded" required>
+                                        <option>Other Income</option>
+                                        <option>Loan Recovery Fees</option>
+                                        <option>Consultancy Income</option>
+                                        <option>Investment Income</option>
+                                        <option>Loan Overpayment</option>
+                                        <option>Custom</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block">Amount (₦)</label>
+                                    <input type="number" step="0.01" x-model="incomeForm.amount" class="w-full border p-2 rounded" required>
+                                </div>
+                                <div>
+                                    <label class="block">Date</label>
+                                    <input type="date" x-model="incomeForm.date" class="w-full border p-2 rounded" required>
+                                </div>
+                                <div>
+                                    <label class="block">Description</label>
+                                    <input type="text" x-model="incomeForm.description" class="w-full border p-2 rounded">
+                                </div>
+                            </div>
+                            <div class="mt-4 flex space-x-2">
+                                <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded">Update</button>
+                                <button type="button" @click="showIncomeEditModal = false; editingIncome = null" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </div>
         </template>
 
-        <!-- Reports Page -->
+        <!-- Reports Page (with Outstanding Balances tab) -->
         <template x-if="page === 'reports'">
             <div x-data="reports" x-init="init" class="space-y-6">
                 <h1 class="text-3xl font-bold">Reports</h1>
                 <div class="flex space-x-4 border-b">
                     <button @click="activeReport='client'" :class="{'font-bold border-b-2 border-indigo-600': activeReport==='client'}" class="pb-2 px-4">Client Loan Report</button>
                     <button @click="activeReport='pl'" :class="{'font-bold border-b-2 border-indigo-600': activeReport==='pl'}" class="pb-2 px-4">Profit & Loss</button>
+                    <button @click="activeReport='outstanding'; loadOutstanding()" :class="{'font-bold border-b-2 border-indigo-600': activeReport==='outstanding'}" class="pb-2 px-4">Outstanding Balances</button>
                 </div>
+
                 <!-- Client Report -->
                 <div x-show="activeReport === 'client'">
                     <div class="bg-white p-4 rounded shadow">
@@ -466,6 +587,7 @@
                         </template>
                     </div>
                 </div>
+
                 <!-- P&L Report -->
                 <div x-show="activeReport === 'pl'">
                     <div class="bg-white p-4 rounded shadow">
@@ -496,13 +618,28 @@
                                 <div class="mb-4">
                                     <h3 class="text-lg font-semibold bg-gray-100 p-2">REVENUE</h3>
                                     <table class="min-w-full">
-                                        <tr><td class="py-1">Interest Income</td><td class="text-right" x-text="formatCurrency(plData.revenue?.interest || 0)"></td></tr>
-                                        <tr><td class="py-1">Admin Fees</td><td class="text-right" x-text="formatCurrency(plData.revenue?.adminFees || 0)"></td></tr>
-                                        <tr><td class="py-1">Penalty Income</td><td class="text-right" x-text="formatCurrency(plData.revenue?.penalty || 0)"></td></tr>
+                                        <tr @dblclick="showInterestDetails" class="cursor-pointer hover:bg-gray-50">
+                                            <td class="py-1">Interest Income</td>
+                                            <td class="text-right" x-text="formatCurrency(plData.revenue?.interest || 0)"></td>
+                                        </tr>
+                                        <tr @dblclick="showAdminFeesDetails" class="cursor-pointer hover:bg-gray-50">
+                                            <td class="py-1">Admin Fees</td>
+                                            <td class="text-right" x-text="formatCurrency(plData.revenue?.adminFees || 0)"></td>
+                                        </tr>
+                                        <tr @dblclick="showPenaltyDetails" class="cursor-pointer hover:bg-gray-50">
+                                            <td class="py-1">Penalty Income</td>
+                                            <td class="text-right" x-text="formatCurrency(plData.revenue?.penalty || 0)"></td>
+                                        </tr>
                                         <template x-for="(amt, cat) in plData.otherIncome" :key="cat">
-                                            <tr><td class="py-1" x-text="cat"></td><td class="text-right" x-text="formatCurrency(amt)"></td></tr>
+                                            <tr @dblclick="showOtherIncomeDetails(cat)" class="cursor-pointer hover:bg-gray-50">
+                                                <td class="py-1" x-text="cat"></td>
+                                                <td class="text-right" x-text="formatCurrency(amt)"></td>
+                                            </tr>
                                         </template>
-                                        <tr class="font-bold border-t"><td class="py-2">Total Revenue</td><td class="text-right" x-text="formatCurrency(plData.totalRevenue || 0)"></td></tr>
+                                        <tr class="font-bold border-t">
+                                            <td class="py-2">Total Revenue</td>
+                                            <td class="text-right" x-text="formatCurrency(plData.totalRevenue || 0)"></td>
+                                        </tr>
                                     </table>
                                 </div>
                                 
@@ -511,9 +648,15 @@
                                     <h3 class="text-lg font-semibold bg-gray-100 p-2">EXPENSES</h3>
                                     <table class="min-w-full">
                                         <template x-for="(amt, cat) in plData.expenses" :key="cat">
-                                            <tr><td class="py-1" x-text="cat"></td><td class="text-right" x-text="formatCurrency(amt)"></td></tr>
+                                            <tr @dblclick="showExpenseDetails(cat)" class="cursor-pointer hover:bg-gray-50">
+                                                <td class="py-1" x-text="cat"></td>
+                                                <td class="text-right" x-text="formatCurrency(amt)"></td>
+                                            </tr>
                                         </template>
-                                        <tr class="font-bold border-t"><td class="py-2">Total Expenses</td><td class="text-right" x-text="formatCurrency(plData.totalExpenses || 0)"></td></tr>
+                                        <tr class="font-bold border-t">
+                                            <td class="py-2">Total Expenses</td>
+                                            <td class="text-right" x-text="formatCurrency(plData.totalExpenses || 0)"></td>
+                                        </tr>
                                     </table>
                                 </div>
                                 
@@ -527,9 +670,15 @@
                                     <h3 class="text-lg font-semibold bg-gray-100 p-2">OWNER'S EQUITY (NET)</h3>
                                     <table class="min-w-full">
                                         <template x-for="(amt, owner) in plData.equityPerOwner" :key="owner">
-                                            <tr><td class="py-1" x-text="owner"></td><td class="text-right" x-text="formatCurrency(amt)"></td></tr>
+                                            <tr>
+                                                <td class="py-1" x-text="owner"></td>
+                                                <td class="text-right" x-text="formatCurrency(amt)"></td>
+                                            </tr>
                                         </template>
-                                        <tr class="font-bold border-t"><td class="py-2">Total Net Equity</td><td class="text-right" x-text="formatCurrency(plData.totalEquity || 0)"></td></tr>
+                                        <tr class="font-bold border-t">
+                                            <td class="py-2">Total Net Equity</td>
+                                            <td class="text-right" x-text="formatCurrency(plData.totalEquity || 0)"></td>
+                                        </tr>
                                     </table>
                                 </div>
                                 
@@ -541,10 +690,130 @@
                         </template>
                     </div>
                 </div>
+
+                <!-- Outstanding Balances Report (with Print All button) -->
+                <div x-show="activeReport === 'outstanding'">
+                    <div class="bg-white p-4 rounded shadow">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">Clients with Outstanding Balances</h2>
+                            <button @click="printAllOutstanding" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Print All Report</button>
+                        </div>
+
+                        <!-- NEW: Total Outstanding Amount Summary -->
+                        <p class="text-lg font-semibold mb-4">
+                            Total Outstanding: <span x-text="formatCurrency(totalOutstandingAmount)"></span>
+                        </p>
+
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead>
+                                    <tr>
+                                        <th class="text-left">Client Name</th>
+                                        <th class="text-right">Total Outstanding</th>
+                                        <th class="text-center">Number of Loans</th>
+                                        <th class="text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="client in outstandingList" :key="client.name">
+                                        <tr class="border-t cursor-pointer hover:bg-gray-50" @click="viewOutstandingClient(client)">
+                                            <td class="py-2" x-text="client.name"></td>
+                                            <td class="text-right" x-text="formatCurrency(client.totalBalance)"></td>
+                                            <td class="text-center" x-text="client.loans.length"></td>
+                                            <td class="text-center">
+                                                <button @click.stop="viewOutstandingClient(client)" class="text-indigo-600 mr-2">View</button>
+                                                <button @click.stop="selectedOutstandingClient = client; printOutstandingClientStatement()" class="text-green-600">Print</button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                    <tr x-show="outstandingList.length === 0">
+                                        <td colspan="4" class="text-center py-4 text-gray-500">No outstanding balances</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Outstanding Client Detail Modal -->
+                <div x-show="showOutstandingDetail" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-lg p-6 max-w-4xl w-full max-h-screen overflow-y-auto">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-2xl font-bold" x-text="selectedOutstandingClient?.name"></h2>
+                            <button @click="showOutstandingDetail = false" class="text-gray-500 hover:text-gray-700">✕</button>
+                        </div>
+                        <div class="mb-4 flex justify-between items-center">
+                            <p class="text-lg">Total Outstanding: <span class="font-bold" x-text="formatCurrency(selectedOutstandingClient?.totalBalance)"></span></p>
+                            <button @click="printOutstandingClientStatement" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Print Statement</button>
+                        </div>
+                        <table class="min-w-full border">
+                            <thead>
+                                <tr>
+                                    <th class="px-4 py-2 text-left">SN</th>
+                                    <th class="px-4 py-2 text-left">Date</th>
+                                    <th class="px-4 py-2 text-right">Amount</th>
+                                    <th class="px-4 py-2 text-right">Balance</th>
+                                    <th class="px-4 py-2 text-right">Rate</th>
+                                    <th class="px-4 py-2 text-right">Duration</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="loan in selectedOutstandingClient?.loans" :key="loan.id">
+                                    <tr>
+                                        <td class="border px-4 py-2" x-text="loan.sn"></td>
+                                        <td class="border px-4 py-2" x-text="loan.date?.toDate().toLocaleDateString()"></td>
+                                        <td class="border px-4 py-2 text-right" x-text="formatCurrency(loan.amount)"></td>
+                                        <td class="border px-4 py-2 text-right" x-text="formatCurrency(loan.balance)"></td>
+                                        <td class="border px-4 py-2 text-right" x-text="loan.int_rate + '%'"></td>
+                                        <td class="border px-4 py-2 text-right" x-text="loan.duration"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Drill‑down Modal -->
+                <div x-show="showDrillDown" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-lg p-6 max-w-4xl w-full max-h-screen overflow-y-auto">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-2xl font-bold" x-text="drillDownTitle"></h2>
+                            <button @click="showDrillDown = false" class="text-gray-500 hover:text-gray-700">✕</button>
+                        </div>
+                        <div class="mb-4">
+                            <button @click="printDrillDown" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Export CSV</button>
+                        </div>
+                        <table class="min-w-full border">
+                            <thead>
+                                <tr>
+                                    <template x-for="(value, key) in drillDownData[0]" :key="key">
+                                        <th class="px-4 py-2 text-left capitalize" x-text="key"></th>
+                                    </template>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="(item, idx) in drillDownData" :key="idx">
+                                    <tr>
+                                        <template x-for="(value, key) in item" :key="key">
+                                            <td class="border px-4 py-2">
+                                                <template x-if="key === 'amount'">
+                                                    <span x-text="formatCurrency(value)"></span>
+                                                </template>
+                                                <template x-if="key !== 'amount'">
+                                                    <span x-text="value"></span>
+                                                </template>
+                                            </td>
+                                        </template>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </template>
 
-        <!-- Admin Page (with editable equity owners) -->
+        <!-- Admin Page -->
         <template x-if="page === 'admin'">
             <div x-data="admin" x-init="init" class="space-y-6">
                 <h1 class="text-3xl font-bold">Admin Controls</h1>
@@ -594,7 +863,7 @@
             </div>
         </template>
 
-        <!-- Footer (visible when logged in) -->
+        <!-- Footer -->
         <footer class="text-center text-gray-500 text-xs py-4 border-t mt-8">
             Developed By (Drex Dang) For Trusted Friends Limited &copy; 2026 | RC: 9384125 | All rights reserved.
         </footer>
