@@ -6,6 +6,11 @@ document.addEventListener('alpine:init', () => {
         showEditForm: false,
         showAll: false,
         editingLoan: null,
+        // Date filter properties
+        dateFilterType: 'all',
+        customStartDate: new Date().toISOString().split('T')[0],
+        customEndDate: new Date().toISOString().split('T')[0],
+        
         formData: {
             names: '',
             date: new Date().toISOString().split('T')[0],
@@ -26,7 +31,6 @@ document.addEventListener('alpine:init', () => {
             this.loadLoans();
             db.collection('loans').orderBy('sn', 'asc').onSnapshot(snapshot => {
                 this.loans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // Update suggestions list when loans change
                 this.nameSuggestions = [...new Set(this.loans.map(l => l.names).filter(Boolean))];
             });
         },
@@ -35,22 +39,53 @@ document.addEventListener('alpine:init', () => {
             this.loans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             this.nameSuggestions = [...new Set(this.loans.map(l => l.names).filter(Boolean))];
         },
+
+        // Search filter (by name or SN)
         get filteredLoans() {
             const term = this.search.toLowerCase();
-            const filtered = this.loans.filter(l => 
+            return this.loans.filter(l => 
                 l.names?.toLowerCase().includes(term) || l.sn?.toString().includes(term)
             );
-            filtered.sort((a, b) => {
+        },
+
+        // Date filter applied after search
+        get filteredLoansByDate() {
+            const searchFiltered = this.filteredLoans;
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const startOfWeek = new Date(today);
+            startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
+            const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+            const startOfYear = new Date(today.getFullYear(), 0, 1);
+
+            return searchFiltered.filter(loan => {
+                if (!loan.date) return this.dateFilterType === 'all';
+                const loanDate = loan.date.toDate ? loan.date.toDate() : new Date(loan.date);
+                switch (this.dateFilterType) {
+                    case 'all': return true;
+                    case 'today': return loanDate >= today;
+                    case 'week': return loanDate >= startOfWeek;
+                    case 'month': return loanDate >= startOfMonth;
+                    case 'year': return loanDate >= startOfYear;
+                    case 'custom':
+                        const start = new Date(this.customStartDate);
+                        const end = new Date(this.customEndDate);
+                        end.setHours(23, 59, 59, 999);
+                        return loanDate >= start && loanDate <= end;
+                    default: return true;
+                }
+            }).sort((a, b) => {
                 const dateA = a.date ? new Date(a.date.seconds * 1000) : new Date(0);
                 const dateB = b.date ? new Date(b.date.seconds * 1000) : new Date(0);
-                return dateB - dateA;
+                return dateB - dateA; // newest first
             });
-            return filtered;
         },
+
         get displayedLoans() {
-            const filtered = this.filteredLoans;
+            const filtered = this.filteredLoansByDate;
             return this.showAll ? filtered : filtered.slice(0, 5);
         },
+
         filterNames() {
             const input = this.formData.names.toLowerCase();
             this.filteredNames = this.nameSuggestions.filter(name => 
@@ -112,7 +147,7 @@ document.addEventListener('alpine:init', () => {
                     total: totalAdd,
                     g_total: gTotal,
                     balance: balance,
-                    overpayment: overpayment  // store overpayment amount
+                    overpayment: overpayment
                 });
 
                 if (overpayment > 0) {
