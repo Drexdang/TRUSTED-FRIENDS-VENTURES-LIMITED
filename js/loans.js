@@ -1,23 +1,21 @@
 document.addEventListener('alpine:init', () => {
     Alpine.data('loans', () => ({
         loans: [],
-        borrowers: [], // for dropdown
+        borrowers: [],
         search: '',
         showAddForm: false,
         showEditForm: false,
         showAll: false,
         editingLoan: null,
-        // Date filter properties
         dateFilterType: 'all',
         customStartDate: new Date().toISOString().split('T')[0],
         customEndDate: new Date().toISOString().split('T')[0],
-        // Write‑off properties
         showWriteOffModal: false,
         writeOffData: { loanId: null, reason: '' },
         
         formData: {
             names: '',
-            borrowerId: '', // link to borrower
+            borrowerId: '',
             date: new Date().toISOString().split('T')[0],
             amount: '',
             int_rate: 5,
@@ -27,7 +25,6 @@ document.addEventListener('alpine:init', () => {
             manual_penalty: 0
         },
         editFormData: {},
-        // Autocomplete properties
         nameSuggestions: [],
         showSuggestions: false,
         filteredNames: [],
@@ -60,13 +57,13 @@ document.addEventListener('alpine:init', () => {
             );
         },
 
-        // Date filter applied after search
+        // Date filter
         get filteredLoansByDate() {
             const searchFiltered = this.filteredLoans;
             const now = new Date();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const startOfWeek = new Date(today);
-            startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
+            startOfWeek.setDate(today.getDate() - today.getDay());
             const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
             const startOfYear = new Date(today.getFullYear(), 0, 1);
 
@@ -89,7 +86,7 @@ document.addEventListener('alpine:init', () => {
             }).sort((a, b) => {
                 const dateA = a.date ? new Date(a.date.seconds * 1000) : new Date(0);
                 const dateB = b.date ? new Date(b.date.seconds * 1000) : new Date(0);
-                return dateB - dateA; // newest first
+                return dateB - dateA;
             });
         },
 
@@ -98,6 +95,7 @@ document.addEventListener('alpine:init', () => {
             return this.showAll ? filtered : filtered.slice(0, 5);
         },
 
+        // Autocomplete methods
         filterNames() {
             const input = this.formData.names.toLowerCase();
             this.filteredNames = this.nameSuggestions.filter(name => 
@@ -112,6 +110,27 @@ document.addEventListener('alpine:init', () => {
             this.filteredNames = [];
             this.showSuggestions = false;
         },
+
+        // NEW: Update client name when borrower is selected
+        updateNameFromBorrower() {
+            if (this.formData.borrowerId) {
+                const selected = this.borrowers.find(b => b.id === this.formData.borrowerId);
+                if (selected) {
+                    this.formData.names = selected.name;
+                }
+            }
+        },
+
+        // NEW: Update edit form name when borrower is selected in edit modal
+        updateEditNameFromBorrower() {
+            if (this.editFormData.borrowerId) {
+                const selected = this.borrowers.find(b => b.id === this.editFormData.borrowerId);
+                if (selected) {
+                    this.editFormData.names = selected.name;
+                }
+            }
+        },
+
         resetForm() {
             this.formData = {
                 names: '',
@@ -125,6 +144,7 @@ document.addEventListener('alpine:init', () => {
                 manual_penalty: 0
             };
         },
+
         async addLoan() {
             try {
                 const nextSN = await getNextLoanSN();
@@ -182,6 +202,7 @@ document.addEventListener('alpine:init', () => {
                 showToast('Error adding loan: ' + error.message, 'error');
             }
         },
+
         editLoan(loan) {
             this.editingLoan = loan;
             this.editFormData = {
@@ -198,6 +219,7 @@ document.addEventListener('alpine:init', () => {
             };
             this.showEditForm = true;
         },
+
         async updateLoan() {
             try {
                 const amount = Number(this.editFormData.amount);
@@ -254,6 +276,7 @@ document.addEventListener('alpine:init', () => {
                 showToast('Update failed: ' + error.message, 'error');
             }
         },
+
         async deleteLoan(loan) {
             if (!confirm(`Are you sure you want to delete loan SN ${loan.sn} – ${loan.names}?`)) return;
             try {
@@ -265,7 +288,6 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // Write‑off methods
         async writeOffLoan() {
             if (!this.writeOffData.loanId || !this.writeOffData.reason) {
                 showToast('Reason required', 'error');
