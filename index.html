@@ -23,6 +23,11 @@
     <script src="js/firebase.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/auth.js"></script>
+    <!-- New features -->
+    <script src="js/audit.js"></script>
+    <script src="js/borrower.js"></script>
+    <script src="js/reminders.js"></script>
+    <!-- Core pages -->
     <script src="js/pdf.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/loans.js"></script>
@@ -70,11 +75,35 @@
                         <p class="text-xs text-indigo-200">RC: 9384125</p>
                     </div>
                 </div>
-                <button @click="logout" class="bg-red-500 px-3 py-1 rounded hover:bg-red-600 self-start md:self-auto">Logout</button>
+                <div class="flex items-center space-x-2">
+                    <!-- Reminders Bell -->
+                    <div x-data="reminders" x-init="init" class="relative inline-block">
+                        <button @click="showReminders = !showReminders" class="relative">
+                            🔔
+                            <span x-show="overdueLoans.length > 0" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center" x-text="overdueLoans.length"></span>
+                        </button>
+                        <div x-show="showReminders" @click.outside="showReminders = false" class="absolute right-0 mt-2 w-80 bg-white rounded shadow-lg z-50 p-2 max-h-96 overflow-y-auto text-gray-800">
+                            <h3 class="font-bold mb-2">Overdue Loans</h3>
+                            <template x-if="overdueLoans.length === 0">
+                                <p class="text-gray-500">No overdue loans</p>
+                            </template>
+                            <template x-for="loan in overdueLoans" :key="loan.id">
+                                <div class="border-b py-2">
+                                    <p class="font-medium" x-text="loan.names"></p>
+                                    <p class="text-sm">SN: <span x-text="loan.sn"></span></p>
+                                    <p class="text-sm">Balance: <span x-text="formatCurrency(loan.balance)"></span></p>
+                                    <p class="text-sm text-red-600">Days overdue: <span x-text="daysOverdue(new Date(loan.date.seconds*1000))"></span></p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    <button @click="logout" class="bg-red-500 px-3 py-1 rounded hover:bg-red-600">Logout</button>
+                </div>
             </div>
             <div class="flex flex-wrap gap-2 mt-2">
                 <button @click="page='dashboard'" class="hover:underline px-2 py-1" :class="{'font-bold bg-indigo-700 rounded': page==='dashboard'}">Dashboard</button>
                 <button @click="page='loans'" class="hover:underline px-2 py-1" :class="{'font-bold bg-indigo-700 rounded': page==='loans'}">Loans</button>
+                <button @click="page='borrowers'" class="hover:underline px-2 py-1" :class="{'font-bold bg-indigo-700 rounded': page==='borrowers'}">Borrowers</button>
                 <button @click="page='expenses'" class="hover:underline px-2 py-1" :class="{'font-bold bg-indigo-700 rounded': page==='expenses'}">Expenses</button>
                 <button @click="page='reports'" class="hover:underline px-2 py-1" :class="{'font-bold bg-indigo-700 rounded': page==='reports'}">Reports</button>
                 <button @click="page='admin'" class="hover:underline px-2 py-1" :class="{'font-bold bg-indigo-700 rounded': page==='admin'}" x-show="isAdmin">Admin</button>
@@ -103,7 +132,7 @@
 
     <!-- Main App Pages -->
     <div x-show="user" class="container mx-auto p-4">
-        <!-- Dashboard Page -->
+        <!-- Dashboard Page (with aging chart) -->
         <template x-if="page === 'dashboard'">
             <div x-data="dashboard" x-init="init" class="space-y-6">
                 <h1 class="text-3xl font-bold">Dashboard</h1>
@@ -136,158 +165,286 @@
                         <canvas id="topClientsChart"></canvas>
                     </div>
                 </div>
-                <div class="bg-white p-4 rounded shadow chart-container">
-                    <h2 class="text-xl font-semibold mb-2">Balance Distribution</h2>
-                    <canvas id="balancePieChart"></canvas>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white p-4 rounded shadow chart-container">
+                        <h2 class="text-xl font-semibold mb-2">Balance Distribution</h2>
+                        <canvas id="balancePieChart"></canvas>
+                    </div>
+                    <div class="bg-white p-4 rounded shadow chart-container">
+                        <h2 class="text-xl font-semibold mb-2">Aging Analysis</h2>
+                        <canvas id="agingChart"></canvas>
+                    </div>
                 </div>
             </div>
         </template>
 
-        <!-- Loans Page (with autocomplete and date filter) -->
-<template x-if="page === 'loans'">
-    <div x-data="loans" x-init="init" class="space-y-6">
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-            <h1 class="text-3xl font-bold">Loan Records</h1>
-            <button @click="showAddForm = !showAddForm; resetAutocomplete()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 w-full sm:w-auto">
-                <span x-text="showAddForm ? 'Cancel' : '+ Add Loan'"></span>
-            </button>
-        </div>
+        <!-- Loans Page (updated with date filter, borrower dropdown, write-off) -->
+        <template x-if="page === 'loans'">
+            <div x-data="loans" x-init="init" class="space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                    <h1 class="text-3xl font-bold">Loan Records</h1>
+                    <button @click="showAddForm = !showAddForm; resetAutocomplete()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 w-full sm:w-auto">
+                        <span x-text="showAddForm ? 'Cancel' : '+ Add Loan'"></span>
+                    </button>
+                </div>
 
-        <!-- Date Filter Controls -->
-        <div class="bg-white p-4 rounded shadow">
-            <h2 class="text-lg font-semibold mb-2">Filter by Date</h2>
-            <div class="flex flex-wrap items-center gap-4">
-                <select x-model="dateFilterType" class="border p-2 rounded">
-                    <option value="all">All Time</option>
-                    <option value="today">Today</option>
-                    <option value="week">This Week</option>
-                    <option value="month">This Month</option>
-                    <option value="year">This Year</option>
-                    <option value="custom">Custom Range</option>
-                </select>
-                <template x-if="dateFilterType === 'custom'">
-                    <div class="flex gap-2">
-                        <input type="date" x-model="customStartDate" class="border p-2 rounded">
-                        <span>to</span>
-                        <input type="date" x-model="customEndDate" class="border p-2 rounded">
+                <!-- Date Filter Controls -->
+                <div class="bg-white p-4 rounded shadow">
+                    <h2 class="text-lg font-semibold mb-2">Filter by Date</h2>
+                    <div class="flex flex-wrap items-center gap-4">
+                        <select x-model="dateFilterType" class="border p-2 rounded">
+                            <option value="all">All Time</option>
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="year">This Year</option>
+                            <option value="custom">Custom Range</option>
+                        </select>
+                        <template x-if="dateFilterType === 'custom'">
+                            <div class="flex gap-2">
+                                <input type="date" x-model="customStartDate" class="border p-2 rounded">
+                                <span>to</span>
+                                <input type="date" x-model="customEndDate" class="border p-2 rounded">
+                            </div>
+                        </template>
+                        <span class="text-sm text-gray-600">
+                            Showing <span x-text="filteredLoansByDate.length"></span> loans
+                        </span>
                     </div>
-                </template>
-                <span class="text-sm text-gray-600">
-                    Showing <span x-text="filteredLoansByDate.length"></span> loans
-                </span>
-            </div>
-        </div>
+                </div>
 
-        <!-- Add Form -->
-        <div x-show="showAddForm" class="bg-white p-6 rounded shadow relative">
-            <h2 class="text-xl font-bold mb-4">New Loan</h2>
-            <form @submit.prevent="addLoan">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Client Name with autocomplete -->
-                    <div class="relative">
-                        <label class="block">Client Name *</label>
-                        <input type="text" x-model="formData.names" @input="filterNames" @focus="showSuggestions = true" @blur="setTimeout(() => showSuggestions = false, 200)" class="w-full border p-2 rounded" required>
-                        <div x-show="showSuggestions && filteredNames.length > 0" class="autocomplete-items absolute bg-white border rounded-b w-full">
-                            <template x-for="name in filteredNames" :key="name">
-                                <div @mousedown="selectName(name)" x-text="name"></div>
-                            </template>
+                <!-- Add Form -->
+                <div x-show="showAddForm" class="bg-white p-6 rounded shadow relative">
+                    <h2 class="text-xl font-bold mb-4">New Loan</h2>
+                    <form @submit.prevent="addLoan">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Client Name with autocomplete -->
+                            <div class="relative">
+                                <label class="block">Client Name *</label>
+                                <input type="text" x-model="formData.names" @input="filterNames" @focus="showSuggestions = true" @blur="setTimeout(() => showSuggestions = false, 200)" class="w-full border p-2 rounded" required>
+                                <div x-show="showSuggestions && filteredNames.length > 0" class="autocomplete-items absolute bg-white border rounded-b w-full">
+                                    <template x-for="name in filteredNames" :key="name">
+                                        <div @mousedown="selectName(name)" x-text="name"></div>
+                                    </template>
+                                </div>
+                            </div>
+                            <!-- Borrower dropdown -->
+                            <div>
+                                <label class="block">Link to Borrower</label>
+                                <select x-model="formData.borrowerId" class="w-full border p-2 rounded">
+                                    <option value="">None</option>
+                                    <template x-for="b in borrowers" :key="b.id">
+                                        <option :value="b.id" x-text="b.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div><label class="block">Date</label><input type="date" x-model="formData.date" class="w-full border p-2 rounded"></div>
+                            <div><label class="block">Amount (₦)</label><input type="number" step="0.01" x-model="formData.amount" class="w-full border p-2 rounded" required></div>
+                            <div><label class="block">Interest Rate %</label><input type="number" step="0.01" x-model="formData.int_rate" class="w-full border p-2 rounded"></div>
+                            <div><label class="block">Duration (months)</label><input type="number" step="1" x-model="formData.duration" class="w-full border p-2 rounded"></div>
+                            <div><label class="block">Admin Fees (₦)</label><input type="number" step="0.01" x-model="formData.admin_fees" class="w-full border p-2 rounded"></div>
+                            <div><label class="block">Already Paid (₦)</label><input type="number" step="0.01" x-model="formData.amt_remitted" class="w-full border p-2 rounded"></div>
+                            <div><label class="block">Manual Penalty (₦)</label><input type="number" step="0.01" x-model="formData.manual_penalty" class="w-full border p-2 rounded"></div>
                         </div>
-                    </div>
-                    <div><label class="block">Date</label><input type="date" x-model="formData.date" class="w-full border p-2 rounded"></div>
-                    <div><label class="block">Amount (₦)</label><input type="number" step="0.01" x-model="formData.amount" class="w-full border p-2 rounded" required></div>
-                    <div><label class="block">Interest Rate %</label><input type="number" step="0.01" x-model="formData.int_rate" class="w-full border p-2 rounded"></div>
-                    <div><label class="block">Duration (months)</label><input type="number" step="1" x-model="formData.duration" class="w-full border p-2 rounded"></div>
-                    <div><label class="block">Admin Fees (₦)</label><input type="number" step="0.01" x-model="formData.admin_fees" class="w-full border p-2 rounded"></div>
-                    <div><label class="block">Already Paid (₦)</label><input type="number" step="0.01" x-model="formData.amt_remitted" class="w-full border p-2 rounded"></div>
-                    <div><label class="block">Manual Penalty (₦)</label><input type="number" step="0.01" x-model="formData.manual_penalty" class="w-full border p-2 rounded"></div>
+                        <button type="submit" class="mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 w-full sm:w-auto">Save Loan</button>
+                    </form>
                 </div>
-                <button type="submit" class="mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 w-full sm:w-auto">Save Loan</button>
-            </form>
-        </div>
 
-        <!-- Search Input -->
-        <div><input type="text" placeholder="Search by name or SN" x-model="search" class="w-full md:w-1/3 border p-2 rounded"></div>
+                <!-- Search Input -->
+                <div><input type="text" placeholder="Search by name or SN" x-model="search" class="w-full md:w-1/3 border p-2 rounded"></div>
 
-        <!-- Loans Table -->
-        <div class="bg-white rounded shadow overflow-x-auto">
-            <table class="min-w-full">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-4 py-2 text-left">SN</th>
-                        <th>Name</th>
-                        <th>Date</th>
-                        <th>Amount</th>
-                        <th>Rate</th>
-                        <th>Dur</th>
-                        <th>Admin</th>
-                        <th>Interest</th>
-                        <th>Auto Penalty</th>
-                        <th>Manual Penalty</th>
-                        <th>Paid</th>
-                        <th>Total</th>
-                        <th>Balance</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template x-for="loan in displayedLoans" :key="loan.id">
-                        <tr class="border-t">
-                            <td class="px-4 py-2" x-text="loan.sn"></td>
-                            <td x-text="loan.names"></td>
-                            <td x-text="loan.date ? new Date(loan.date.seconds*1000).toLocaleDateString() : ''"></td>
-                            <td x-text="formatCurrency(loan.amount)"></td>
-                            <td x-text="loan.int_rate + '%'"></td>
-                            <td x-text="loan.duration"></td>
-                            <td x-text="formatCurrency(loan.admin_fees)"></td>
-                            <td x-text="formatCurrency(loan.interest)"></td>
-                            <td x-text="formatCurrency(loan.auto_penalty || 0)"></td>
-                            <td x-text="formatCurrency(loan.manual_penalty || 0)"></td>
-                            <td x-text="formatCurrency(loan.amt_remitted)"></td>
-                            <td x-text="formatCurrency(loan.g_total)"></td>
-                            <td x-text="formatCurrency(loan.balance)"></td>
-                            <td>
-                                <button @click="editLoan(loan)" class="text-indigo-600 mr-2">Edit</button>
-                                <button @click="deleteLoan(loan)" class="text-red-600">Delete</button>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-            <div class="p-2 text-center" x-show="filteredLoansByDate.length > 5">
-                <button @click="showAll = !showAll" class="text-indigo-600 hover:underline">
-                    <span x-text="showAll ? 'Show Less' : 'View All ' + filteredLoansByDate.length + ' Records'"></span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Edit Loan Modal (unchanged) -->
-        <div x-show="showEditForm" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-lg p-6 max-w-2xl w-full">
-                <h2 class="text-xl font-bold mb-4">Edit Loan SN <span x-text="editingLoan?.sn"></span></h2>
-                <div x-show="editingLoan?.overpayment" class="mb-2 p-2 bg-yellow-100 text-yellow-800 rounded">
-                    Overpayment of <span x-text="formatCurrency(editingLoan.overpayment)"></span> was recorded as other income.
+                <!-- Loans Table -->
+                <div class="bg-white rounded shadow overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left">SN</th>
+                                <th>Name</th>
+                                <th>Borrower</th>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Rate</th>
+                                <th>Dur</th>
+                                <th>Admin</th>
+                                <th>Interest</th>
+                                <th>Auto Penalty</th>
+                                <th>Manual Penalty</th>
+                                <th>Paid</th>
+                                <th>Total</th>
+                                <th>Balance</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="loan in displayedLoans" :key="loan.id">
+                                <tr class="border-t">
+                                    <td class="px-4 py-2" x-text="loan.sn"></td>
+                                    <td x-text="loan.names"></td>
+                                    <td>
+                                        <span x-text="borrowers.find(b => b.id === loan.borrowerId)?.name || ''"></span>
+                                    </td>
+                                    <td x-text="loan.date ? new Date(loan.date.seconds*1000).toLocaleDateString() : ''"></td>
+                                    <td x-text="formatCurrency(loan.amount)"></td>
+                                    <td x-text="loan.int_rate + '%'"></td>
+                                    <td x-text="loan.duration"></td>
+                                    <td x-text="formatCurrency(loan.admin_fees)"></td>
+                                    <td x-text="formatCurrency(loan.interest)"></td>
+                                    <td x-text="formatCurrency(loan.auto_penalty || 0)"></td>
+                                    <td x-text="formatCurrency(loan.manual_penalty || 0)"></td>
+                                    <td x-text="formatCurrency(loan.amt_remitted)"></td>
+                                    <td x-text="formatCurrency(loan.g_total)"></td>
+                                    <td x-text="formatCurrency(loan.balance)"></td>
+                                    <td>
+                                        <button @click="editLoan(loan)" class="text-indigo-600 mr-2">Edit</button>
+                                        <button @click="deleteLoan(loan)" class="text-red-600 mr-2">Delete</button>
+                                        <button @click="writeOffData = { loanId: loan.id, reason: '' }; showWriteOffModal = true" class="text-orange-600">Write Off</button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                    <div class="p-2 text-center" x-show="filteredLoansByDate.length > 5">
+                        <button @click="showAll = !showAll" class="text-indigo-600 hover:underline">
+                            <span x-text="showAll ? 'Show Less' : 'View All ' + filteredLoansByDate.length + ' Records'"></span>
+                        </button>
+                    </div>
                 </div>
-                <form @submit.prevent="updateLoan">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div><label>Name</label><input type="text" x-model="editFormData.names" class="w-full border p-2 rounded"></div>
-                        <div><label>Date</label><input type="date" x-model="editFormData.date" class="w-full border p-2 rounded"></div>
-                        <div><label>Amount</label><input type="number" step="0.01" x-model="editFormData.amount" class="w-full border p-2 rounded"></div>
-                        <div><label>Rate %</label><input type="number" step="0.01" x-model="editFormData.int_rate" class="w-full border p-2 rounded"></div>
-                        <div><label>Duration</label><input type="number" step="1" x-model="editFormData.duration" class="w-full border p-2 rounded"></div>
-                        <div><label>Admin Fees</label><input type="number" step="0.01" x-model="editFormData.admin_fees" class="w-full border p-2 rounded"></div>
-                        <div><label>Already Paid</label><input type="number" step="0.01" x-model="editFormData.amt_remitted" class="w-full border p-2 rounded"></div>
-                        <div><label>Auto Penalty (₦)</label><input type="number" step="0.01" x-model="editFormData.auto_penalty" class="w-full border p-2 rounded"></div>
-                        <div><label>Manual Penalty (₦)</label><input type="number" step="0.01" x-model="editFormData.manual_penalty" class="w-full border p-2 rounded"></div>
+
+                <!-- Edit Loan Modal (with borrower dropdown) -->
+                <div x-show="showEditForm" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-lg p-6 max-w-2xl w-full max-h-screen overflow-y-auto">
+                        <h2 class="text-xl font-bold mb-4">Edit Loan SN <span x-text="editingLoan?.sn"></span></h2>
+                        <div x-show="editingLoan?.overpayment" class="mb-2 p-2 bg-yellow-100 text-yellow-800 rounded">
+                            Overpayment of <span x-text="formatCurrency(editingLoan.overpayment)"></span> was recorded as other income.
+                        </div>
+                        <form @submit.prevent="updateLoan">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div><label>Name</label><input type="text" x-model="editFormData.names" class="w-full border p-2 rounded"></div>
+                                <div>
+                                    <label>Borrower</label>
+                                    <select x-model="editFormData.borrowerId" class="w-full border p-2 rounded">
+                                        <option value="">None</option>
+                                        <template x-for="b in borrowers" :key="b.id">
+                                            <option :value="b.id" x-text="b.name"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div><label>Date</label><input type="date" x-model="editFormData.date" class="w-full border p-2 rounded"></div>
+                                <div><label>Amount</label><input type="number" step="0.01" x-model="editFormData.amount" class="w-full border p-2 rounded"></div>
+                                <div><label>Rate %</label><input type="number" step="0.01" x-model="editFormData.int_rate" class="w-full border p-2 rounded"></div>
+                                <div><label>Duration</label><input type="number" step="1" x-model="editFormData.duration" class="w-full border p-2 rounded"></div>
+                                <div><label>Admin Fees</label><input type="number" step="0.01" x-model="editFormData.admin_fees" class="w-full border p-2 rounded"></div>
+                                <div><label>Already Paid</label><input type="number" step="0.01" x-model="editFormData.amt_remitted" class="w-full border p-2 rounded"></div>
+                                <div><label>Auto Penalty (₦)</label><input type="number" step="0.01" x-model="editFormData.auto_penalty" class="w-full border p-2 rounded"></div>
+                                <div><label>Manual Penalty (₦)</label><input type="number" step="0.01" x-model="editFormData.manual_penalty" class="w-full border p-2 rounded"></div>
+                            </div>
+                            <div class="mt-4 flex space-x-2">
+                                <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded">Update</button>
+                                <button type="button" @click="showEditForm = false; editingLoan = null" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
+                            </div>
+                        </form>
                     </div>
-                    <div class="mt-4 flex space-x-2">
-                        <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded">Update</button>
-                        <button type="button" @click="showEditForm = false; editingLoan = null" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
+                </div>
+
+                <!-- Write Off Modal -->
+                <div x-show="showWriteOffModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-lg p-6 max-w-md w-full">
+                        <h2 class="text-xl font-bold mb-4">Write Off Loan</h2>
+                        <form @submit.prevent="writeOffLoan">
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="block">Reason for Write‑Off</label>
+                                    <textarea x-model="writeOffData.reason" class="w-full border p-2 rounded" rows="3" required></textarea>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex space-x-2">
+                                <button type="submit" class="bg-orange-600 text-white px-4 py-2 rounded">Confirm Write‑Off</button>
+                                <button type="button" @click="showWriteOffModal = false" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
+                            </div>
+                        </form>
                     </div>
-                </form>
+                </div>
             </div>
-        </div>
-    </div>
-</template>
+        </template>
+
+        <!-- Borrowers Page -->
+        <template x-if="page === 'borrowers'">
+            <div x-data="borrower" x-init="init" class="space-y-6">
+                <div class="flex justify-between items-center">
+                    <h1 class="text-3xl font-bold">Borrowers</h1>
+                    <button @click="showAddForm = !showAddForm" class="bg-indigo-600 text-white px-4 py-2 rounded">
+                        <span x-text="showAddForm ? 'Cancel' : '+ Add Borrower'"></span>
+                    </button>
+                </div>
+                <div x-show="showAddForm" class="bg-white p-6 rounded shadow">
+                    <form @submit.prevent="addBorrower">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label>Name *</label><input type="text" x-model="formData.name" required class="w-full border p-2 rounded"></div>
+                            <div><label>Phone</label><input type="text" x-model="formData.phone" class="w-full border p-2 rounded"></div>
+                            <div><label>Address</label><input type="text" x-model="formData.address" class="w-full border p-2 rounded"></div>
+                            <div><label>ID Type</label><select x-model="formData.idType" class="w-full border p-2 rounded">
+                                <option>National ID</option>
+                                <option>Passport</option>
+                                <option>Driver's License</option>
+                                <option>Voter's Card</option>
+                            </select></div>
+                            <div><label>ID Number</label><input type="text" x-model="formData.idNumber" class="w-full border p-2 rounded"></div>
+                            <div><label>Guarantor Name</label><input type="text" x-model="formData.guarantorName" class="w-full border p-2 rounded"></div>
+                            <div><label>Guarantor Phone</label><input type="text" x-model="formData.guarantorPhone" class="w-full border p-2 rounded"></div>
+                            <div class="md:col-span-2"><label>Notes</label><textarea x-model="formData.notes" class="w-full border p-2 rounded" rows="2"></textarea></div>
+                        </div>
+                        <button type="submit" class="mt-4 bg-green-600 text-white px-4 py-2 rounded">Save Borrower</button>
+                    </form>
+                </div>
+                <div class="bg-white rounded shadow overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead><tr><th>Name</th><th>Phone</th><th>ID Number</th><th>Guarantor</th><th>Actions</th></tr></thead>
+                        <tbody>
+                            <template x-for="b in borrowers" :key="b.id">
+                                <tr>
+                                    <td x-text="b.name"></td>
+                                    <td x-text="b.phone"></td>
+                                    <td x-text="b.idNumber"></td>
+                                    <td x-text="b.guarantorName"></td>
+                                    <td>
+                                        <button @click="editBorrower(b)" class="text-indigo-600 mr-2">Edit</button>
+                                        <button @click="deleteBorrower(b)" class="text-red-600">Delete</button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Edit Borrower Modal -->
+                <div x-show="showEditModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-lg p-6 max-w-2xl w-full max-h-screen overflow-y-auto">
+                        <h2 class="text-xl font-bold mb-4">Edit Borrower</h2>
+                        <form @submit.prevent="updateBorrower">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div><label>Name *</label><input type="text" x-model="formData.name" required class="w-full border p-2 rounded"></div>
+                                <div><label>Phone</label><input type="text" x-model="formData.phone" class="w-full border p-2 rounded"></div>
+                                <div><label>Address</label><input type="text" x-model="formData.address" class="w-full border p-2 rounded"></div>
+                                <div><label>ID Type</label><select x-model="formData.idType" class="w-full border p-2 rounded">
+                                    <option>National ID</option>
+                                    <option>Passport</option>
+                                    <option>Driver's License</option>
+                                    <option>Voter's Card</option>
+                                </select></div>
+                                <div><label>ID Number</label><input type="text" x-model="formData.idNumber" class="w-full border p-2 rounded"></div>
+                                <div><label>Guarantor Name</label><input type="text" x-model="formData.guarantorName" class="w-full border p-2 rounded"></div>
+                                <div><label>Guarantor Phone</label><input type="text" x-model="formData.guarantorPhone" class="w-full border p-2 rounded"></div>
+                                <div class="md:col-span-2"><label>Notes</label><textarea x-model="formData.notes" class="w-full border p-2 rounded" rows="2"></textarea></div>
+                            </div>
+                            <div class="mt-4 flex space-x-2">
+                                <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded">Update</button>
+                                <button type="button" @click="showEditModal = false; editingBorrower = null" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </template>
 
         <!-- Expenses & Income & Equity Page -->
         <template x-if="page === 'expenses'">

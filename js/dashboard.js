@@ -35,6 +35,7 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
+        // KPI computed properties
         get totalPrincipal() {
             return this.loans.reduce((sum, l) => sum + (l.amount || 0), 0);
         },
@@ -66,6 +67,30 @@ document.addEventListener('alpine:init', () => {
                 .sort((a, b) => new Date(a.month) - new Date(b.month));
         },
 
+        // NEW: Aging buckets for overdue loans
+        getAgingBuckets() {
+            const today = new Date();
+            const buckets = {
+                '0-30 days': 0,
+                '31-60 days': 0,
+                '61-90 days': 0,
+                '90+ days': 0
+            };
+            this.loans.forEach(loan => {
+                if (loan.balance <= 0) return;
+                if (!loan.date) return;
+                const dueDate = new Date(loan.date.seconds * 1000);
+                dueDate.setMonth(dueDate.getMonth() + (loan.duration || 0));
+                const diffDays = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+                if (diffDays <= 0) return;
+                if (diffDays <= 30) buckets['0-30 days'] += loan.balance;
+                else if (diffDays <= 60) buckets['31-60 days'] += loan.balance;
+                else if (diffDays <= 90) buckets['61-90 days'] += loan.balance;
+                else buckets['90+ days'] += loan.balance;
+            });
+            return buckets;
+        },
+
         async renderCharts() {
             // Prevent concurrent renders
             if (this.isRendering) {
@@ -89,6 +114,10 @@ document.addEventListener('alpine:init', () => {
                 this.charts.pie.destroy();
                 this.charts.pie = null;
             }
+            if (this.charts.aging) {
+                this.charts.aging.destroy();
+                this.charts.aging = null;
+            }
 
             // Wait a tiny moment for cleanup
             await new Promise(resolve => setTimeout(resolve, 50));
@@ -97,10 +126,16 @@ document.addEventListener('alpine:init', () => {
             const canvas1 = document.getElementById('balanceChart');
             const canvas2 = document.getElementById('topClientsChart');
             const canvas3 = document.getElementById('balancePieChart');
+            const canvas4 = document.getElementById('agingChart');
 
-            console.log('Canvas elements found:', { canvas1: !!canvas1, canvas2: !!canvas2, canvas3: !!canvas3 });
+            console.log('Canvas elements found:', { 
+                canvas1: !!canvas1, 
+                canvas2: !!canvas2, 
+                canvas3: !!canvas3,
+                canvas4: !!canvas4
+            });
 
-            if (!canvas1 || !canvas2 || !canvas3) {
+            if (!canvas1 || !canvas2 || !canvas3 || !canvas4) {
                 if (this.renderAttempts < this.maxRetries) {
                     this.renderAttempts++;
                     console.log(`Canvas not ready, retry ${this.renderAttempts}/${this.maxRetries}`);
@@ -117,8 +152,9 @@ document.addEventListener('alpine:init', () => {
             const ctx1 = canvas1.getContext('2d');
             const ctx2 = canvas2.getContext('2d');
             const ctx3 = canvas3.getContext('2d');
+            const ctx4 = canvas4.getContext('2d');
 
-            if (!ctx1 || !ctx2 || !ctx3) {
+            if (!ctx1 || !ctx2 || !ctx3 || !ctx4) {
                 console.error('Canvas context not available, retrying...');
                 this.isRendering = false;
                 setTimeout(() => this.renderCharts(), 200);
@@ -244,6 +280,33 @@ document.addEventListener('alpine:init', () => {
                         }
                     });
                 }
+
+                // NEW: Aging analysis chart
+                const agingBuckets = this.getAgingBuckets();
+                console.log('Creating aging chart', agingBuckets);
+                this.charts.aging = new Chart(canvas4, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(agingBuckets),
+                        datasets: [{
+                            label: 'Overdue Balance',
+                            data: Object.values(agingBuckets),
+                            backgroundColor: ['#f39c12', '#e67e22', '#d35400', '#c0392b']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: (ctx) => formatCurrency(ctx.raw)
+                                }
+                            }
+                        }
+                    }
+                });
+
             } catch (error) {
                 console.error('Chart creation error:', error);
             }

@@ -1,6 +1,7 @@
 document.addEventListener('alpine:init', () => {
     Alpine.data('loans', () => ({
         loans: [],
+        borrowers: [], // for dropdown
         search: '',
         showAddForm: false,
         showEditForm: false,
@@ -10,9 +11,13 @@ document.addEventListener('alpine:init', () => {
         dateFilterType: 'all',
         customStartDate: new Date().toISOString().split('T')[0],
         customEndDate: new Date().toISOString().split('T')[0],
+        // Write‑off properties
+        showWriteOffModal: false,
+        writeOffData: { loanId: null, reason: '' },
         
         formData: {
             names: '',
+            borrowerId: '', // link to borrower
             date: new Date().toISOString().split('T')[0],
             amount: '',
             int_rate: 5,
@@ -29,15 +34,22 @@ document.addEventListener('alpine:init', () => {
 
         init() {
             this.loadLoans();
+            this.loadBorrowers();
             db.collection('loans').orderBy('sn', 'asc').onSnapshot(snapshot => {
                 this.loans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 this.nameSuggestions = [...new Set(this.loans.map(l => l.names).filter(Boolean))];
             });
         },
+
         async loadLoans() {
             const snapshot = await db.collection('loans').orderBy('sn', 'asc').get();
             this.loans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             this.nameSuggestions = [...new Set(this.loans.map(l => l.names).filter(Boolean))];
+        },
+
+        async loadBorrowers() {
+            const snapshot = await db.collection('borrowers').orderBy('name', 'asc').get();
+            this.borrowers = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         },
 
         // Search filter (by name or SN)
@@ -103,6 +115,7 @@ document.addEventListener('alpine:init', () => {
         resetForm() {
             this.formData = {
                 names: '',
+                borrowerId: '',
                 date: new Date().toISOString().split('T')[0],
                 amount: '',
                 int_rate: 5,
@@ -135,6 +148,7 @@ document.addEventListener('alpine:init', () => {
                 const docRef = await db.collection('loans').add({
                     sn: nextSN,
                     names: this.formData.names,
+                    borrowerId: this.formData.borrowerId || null,
                     date: firebase.firestore.Timestamp.fromDate(loanDate),
                     amount: amount,
                     int_rate: rate,
@@ -172,6 +186,7 @@ document.addEventListener('alpine:init', () => {
             this.editingLoan = loan;
             this.editFormData = {
                 names: loan.names,
+                borrowerId: loan.borrowerId || '',
                 date: loan.date ? new Date(loan.date.seconds * 1000).toISOString().split('T')[0] : '',
                 amount: loan.amount,
                 int_rate: loan.int_rate,
@@ -205,6 +220,7 @@ document.addEventListener('alpine:init', () => {
 
                 await db.collection('loans').doc(this.editingLoan.id).update({
                     names: this.editFormData.names,
+                    borrowerId: this.editFormData.borrowerId || null,
                     date: firebase.firestore.Timestamp.fromDate(loanDate),
                     amount: amount,
                     int_rate: rate,
@@ -246,6 +262,30 @@ document.addEventListener('alpine:init', () => {
                 showToast('Loan deleted');
             } catch (error) {
                 showToast('Delete failed: ' + error.message, 'error');
+            }
+        },
+
+        // Write‑off methods
+        async writeOffLoan() {
+            if (!this.writeOffData.loanId || !this.writeOffData.reason) {
+                showToast('Reason required', 'error');
+                return;
+            }
+            try {
+                const loan = this.loans.find(l => l.id === this.writeOffData.loanId);
+                await db.collection('writtenOffLoans').add({
+                    ...loan,
+                    writeOffReason: this.writeOffData.reason,
+                    writeOffDate: firebase.firestore.Timestamp.fromDate(new Date()),
+                    writtenOffBy: auth.currentUser?.email
+                });
+                await db.collection('loans').doc(this.writeOffData.loanId).delete();
+                await logAudit('WRITE_OFF', 'loans', this.writeOffData.loanId, { reason: this.writeOffData.reason, sn: loan.sn });
+                showToast('Loan written off');
+                this.showWriteOffModal = false;
+                this.writeOffData = { loanId: null, reason: '' };
+            } catch (error) {
+                showToast('Error: ' + error.message, 'error');
             }
         }
     }));
