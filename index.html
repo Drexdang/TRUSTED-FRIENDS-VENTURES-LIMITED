@@ -447,7 +447,7 @@
             </div>
         </template>
 
-        <!-- Expenses & Income & Equity Page - WITH NEW EXPENSE CATEGORIES ADDED -->
+        <!-- Expenses & Income & Equity Page -->
         <template x-if="page === 'expenses'">
             <div x-data="expenses" x-init="init" class="space-y-6">
                 <h1 class="text-3xl font-bold">Expenses, Income & Equity</h1>
@@ -457,7 +457,7 @@
                     <button @click="activeTab='equity'" :class="{'font-bold border-b-2 border-indigo-600': activeTab==='equity'}" class="pb-2 px-4">Equity</button>
                 </div>
 
-                <!-- Expenses Tab - WITH NEW CATEGORIES -->
+                <!-- Expenses Tab -->
                 <div x-show="activeTab === 'expenses'">
                     <form @submit.prevent="addExpense" class="bg-white p-4 rounded shadow mb-4 grid grid-cols-1 md:grid-cols-5 gap-2">
                         <select x-model="expenseForm.category" required class="border p-2 rounded">
@@ -466,14 +466,6 @@
                             <option>Social Support</option>
                             <option>Administrative Expenses</option>
                             <option>Drawings</option>
-                            <option>Transportation expenses</option>
-                            <option>Bank charges</option>
-                            <option>Taxe and fines</option>
-                            <option>Legal fees</option>
-                            <option>Management incentive</option>
-                            <option>Advertisement</option>
-                            <option>Stationary</option>
-                            <option>Registration</option>
                             <option>Other</option>
                         </select>
                         <input type="number" step="0.01" x-model="expenseForm.amount" placeholder="Amount" required class="border p-2 rounded">
@@ -673,7 +665,7 @@
                     </div>
                 </div>
 
-                <!-- Edit Expense Modal - WITH NEW CATEGORIES -->
+                <!-- Edit Expense Modal -->
                 <div x-show="showExpenseEditModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                     <div class="bg-white rounded-lg p-6 max-w-md w-full">
                         <h2 class="text-xl font-bold mb-4">Edit Expense</h2>
@@ -686,14 +678,6 @@
                                         <option>Social Support</option>
                                         <option>Administrative Expenses</option>
                                         <option>Drawings</option>
-                                        <option>Transportation expenses</option>
-                                        <option>Bank charges</option>
-                                        <option>Taxe and fines</option>
-                                        <option>Legal fees</option>
-                                        <option>Management incentive</option>
-                                        <option>Advertisement</option>
-                                        <option>Stationary</option>
-                                        <option>Registration</option>
                                         <option>Other</option>
                                     </select>
                                 </div>
@@ -758,217 +742,9 @@
             </div>
         </template>
 
-        <!-- Reports Page - ENHANCED: Client Report searches by Name OR Serial Number -->
-                <!-- Reports Page (with Outstanding Balances tab) - FIXED: Search by Name or SN -->
-                <!-- Reports Page (with Outstanding Balances tab) - FULLY WORKING Search by Name or SN -->
+        <!-- Reports Page (with Outstanding Balances tab) -->
         <template x-if="page === 'reports'">
-            <div x-data="{
-                activeReport: 'client',
-                searchNameOrSN: '',
-                selectedClientLoans: [],
-                searchSN: '',
-                selectedLoan: null,
-                period: 'all',
-                startDate: '',
-                endDate: '',
-                plData: null,
-                outstandingList: [],
-                totalOutstandingAmount: 0,
-                showOutstandingDetail: false,
-                selectedOutstandingClient: null,
-                showDrillDown: false,
-                drillDownTitle: '',
-                drillDownData: [],
-                allLoans: [],
-                
-                init() {
-                    this.loadAllLoans();
-                },
-                
-                loadAllLoans() {
-                    if (typeof db !== 'undefined' && db) {
-                        db.collection('loans').onSnapshot(snapshot => {
-                            this.allLoans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        });
-                    } else {
-                        // Demo fallback
-                        this.allLoans = [];
-                    }
-                },
-                
-                searchLoanByNameOrSN() {
-                    const searchTerm = this.searchNameOrSN.trim().toLowerCase();
-                    if (!searchTerm) {
-                        this.selectedClientLoans = [];
-                        return;
-                    }
-                    
-                    if (this.allLoans.length === 0) {
-                        if (typeof db !== 'undefined' && db) {
-                            db.collection('loans').get().then(snapshot => {
-                                this.allLoans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                                this.performSearch(searchTerm);
-                            });
-                        } else {
-                            this.selectedClientLoans = [];
-                            showToast('No loan data available', 'red');
-                        }
-                    } else {
-                        this.performSearch(searchTerm);
-                    }
-                },
-                
-                performSearch(searchTerm) {
-                    this.selectedClientLoans = this.allLoans.filter(loan => {
-                        const nameMatch = loan.names && loan.names.toLowerCase().includes(searchTerm);
-                        const snMatch = loan.sn && loan.sn.toString().toLowerCase().includes(searchTerm);
-                        return nameMatch || snMatch;
-                    });
-                    
-                    if (this.selectedClientLoans.length === 0) {
-                        showToast('No loans found for "' + this.searchNameOrSN + '"', 'red');
-                    } else {
-                        showToast('Found ' + this.selectedClientLoans.length + ' loan(s)', 'green');
-                    }
-                },
-                
-                clearClientSearch() {
-                    this.searchNameOrSN = '';
-                    this.selectedClientLoans = [];
-                    showToast('Search cleared', 'green');
-                },
-                
-                downloadClientPDF(loan) {
-                    if (typeof downloadLoanPDF === 'function') {
-                        downloadLoanPDF(loan);
-                    } else {
-                        showToast('PDF function not available', 'red');
-                    }
-                },
-                
-                downloadClientReportPDF() {
-                    if (this.selectedClientLoans.length === 0) return;
-                    if (typeof window.jspdf !== 'undefined') {
-                        const { jsPDF } = window.jspdf;
-                        const doc = new jsPDF();
-                        doc.text('Client Loan Report for: ' + this.searchNameOrSN, 14, 20);
-                        const tableData = this.selectedClientLoans.map(l => [l.sn, l.names, l.amount, l.balance]);
-                        doc.autoTable({ head: [['SN', 'Name', 'Amount', 'Balance']], body: tableData, startY: 30 });
-                        doc.save('client_report.pdf');
-                    } else {
-                        showToast('PDF generation not available', 'red');
-                    }
-                },
-                
-                exportClientReportCSV() {
-                    if (this.selectedClientLoans.length === 0) return;
-                    const headers = ['SN', 'Client Name', 'Amount', 'Balance', 'Date', 'Interest', 'Status'];
-                    const rows = this.selectedClientLoans.map(l => [l.sn, l.names, l.amount, l.balance, l.date ? new Date(l.date.seconds * 1000).toLocaleDateString() : '', l.interest || 0, l.balance <= 0 ? 'Paid' : 'Outstanding']);
-                    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
-                    const blob = new Blob([csv], { type: 'text/csv' });
-                    const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = 'client_report.csv';
-                    a.click();
-                    URL.revokeObjectURL(a.href);
-                },
-                
-                searchLoan() {
-                    if (!this.searchSN) return;
-                    if (this.allLoans.length === 0) {
-                        if (typeof db !== 'undefined' && db) {
-                            db.collection('loans').where('sn', '==', this.searchSN).get().then(snapshot => {
-                                if (!snapshot.empty) {
-                                    this.selectedLoan = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
-                                } else {
-                                    this.selectedLoan = null;
-                                    showToast('Loan not found', 'red');
-                                }
-                            });
-                        }
-                    } else {
-                        this.selectedLoan = this.allLoans.find(l => l.sn == this.searchSN);
-                        if (!this.selectedLoan) showToast('Loan not found', 'red');
-                    }
-                },
-                
-                computePL() {
-                    if (typeof computeProfitLoss === 'function') {
-                        computeProfitLoss(this.period, this.startDate, this.endDate).then(data => { this.plData = data; });
-                    } else {
-                        showToast('P&L function not available', 'red');
-                    }
-                },
-                
-                downloadPLPDF() { if (typeof downloadPLReport === 'function') downloadPLReport(this.plData, this.period); else showToast('PDF function not available', 'red'); },
-                downloadPLCSV() { if (typeof exportPLCSV === 'function') exportPLCSV(this.plData, this.period); else showToast('CSV function not available', 'red'); },
-                showInterestDetails() { if (typeof showInterestDrillDown === 'function') showInterestDrillDown(this.period, this.startDate, this.endDate); else showToast('Drill down not available', 'red'); },
-                showAdminFeesDetails() { if (typeof showAdminFeesDrillDown === 'function') showAdminFeesDrillDown(this.period, this.startDate, this.endDate); else showToast('Drill down not available', 'red'); },
-                showPenaltyDetails() { if (typeof showPenaltyDrillDown === 'function') showPenaltyDrillDown(this.period, this.startDate, this.endDate); else showToast('Drill down not available', 'red'); },
-                showOtherIncomeDetails(cat) { if (typeof showOtherIncomeDrillDown === 'function') showOtherIncomeDrillDown(cat, this.period, this.startDate, this.endDate); else showToast('Drill down not available', 'red'); },
-                showExpenseDetails(cat) { if (typeof showExpenseDrillDown === 'function') showExpenseDrillDown(cat, this.period, this.startDate, this.endDate); else showToast('Drill down not available', 'red'); },
-                
-                loadOutstanding() {
-                    if (typeof loadOutstandingBalances === 'function') {
-                        loadOutstandingBalances().then(data => { this.outstandingList = data.list; this.totalOutstandingAmount = data.total; });
-                    } else if (this.allLoans.length > 0) {
-                        const balances = {};
-                        this.allLoans.forEach(loan => {
-                            if (loan.balance > 0) {
-                                if (!balances[loan.names]) balances[loan.names] = { name: loan.names, totalBalance: 0, loans: [] };
-                                balances[loan.names].totalBalance += loan.balance;
-                                balances[loan.names].loans.push(loan);
-                            }
-                        });
-                        this.outstandingList = Object.values(balances);
-                        this.totalOutstandingAmount = this.outstandingList.reduce((sum, c) => sum + c.totalBalance, 0);
-                    }
-                },
-                
-                viewOutstandingClient(client) {
-                    this.selectedOutstandingClient = client;
-                    this.showOutstandingDetail = true;
-                },
-                
-                printOutstandingClientStatement() {
-                    if (this.selectedOutstandingClient) {
-                        const win = window.open();
-                        win.document.write('<html><head><title>Outstanding Statement</title><style>table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:8px}</style></head><body>');
-                        win.document.write('<h2>' + this.selectedOutstandingClient.name + ' - Outstanding Statement</h2>');
-                        win.document.write('<p>Total Outstanding: ₦' + this.selectedOutstandingClient.totalBalance.toLocaleString() + '</p>');
-                        win.document.write('<table><thead><tr><th>SN</th><th>Date</th><th>Amount</th><th>Balance</th></tr></thead><tbody>');
-                        this.selectedOutstandingClient.loans.forEach(l => {
-                            win.document.write('<tr><td>' + l.sn + '</td><td>' + (l.date ? new Date(l.date.seconds * 1000).toLocaleDateString() : '') + '</td><td>' + (l.amount || 0).toLocaleString() + '</td><td>' + (l.balance || 0).toLocaleString() + '</td></tr>');
-                        });
-                        win.document.write('</tbody></table></body></html>');
-                        win.print();
-                    }
-                },
-                
-                printAllOutstanding() {
-                    const win = window.open();
-                    win.document.write('<html><head><title>All Outstanding Balances</title><style>table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:8px}</style></head><body>');
-                    win.document.write('<h2>All Outstanding Balances Report</h2>');
-                    win.document.write('<p>Total Outstanding: ₦' + this.totalOutstandingAmount.toLocaleString() + '</p>');
-                    win.document.write('<table><thead><tr><th>Client Name</th><th>Total Outstanding</th><th>Number of Loans</th></tr></thead><tbody>');
-                    this.outstandingList.forEach(c => {
-                        win.document.write('<tr><td>' + c.name + '</td><td>₦' + c.totalBalance.toLocaleString() + '</td><td>' + c.loans.length + '</td></tr>');
-                    });
-                    win.document.write('</tbody></table></body></html>');
-                    win.print();
-                },
-                
-                printDrillDown() {
-                    if (this.drillDownData.length) {
-                        const csv = [Object.keys(this.drillDownData[0]), ...this.drillDownData.map(row => Object.values(row))].map(row => row.join(',')).join('\n');
-                        const blob = new Blob([csv], { type: 'text/csv' });
-                        const a = document.createElement('a');
-                        a.href = URL.createObjectURL(blob);
-                        a.download = 'drilldown.csv';
-                        a.click();
-                    }
-                }
-            }" class="space-y-6">
+            <div x-data="reports" x-init="init" class="space-y-6">
                 <h1 class="text-3xl font-bold">Reports</h1>
                 <div class="flex space-x-4 border-b">
                     <button @click="activeReport='client'" :class="{'font-bold border-b-2 border-indigo-600': activeReport==='client'}" class="pb-2 px-4">Client Loan Report</button>
@@ -976,94 +752,244 @@
                     <button @click="activeReport='outstanding'; loadOutstanding()" :class="{'font-bold border-b-2 border-indigo-600': activeReport==='outstanding'}" class="pb-2 px-4">Outstanding Balances</button>
                 </div>
 
-                <!-- Client Report - SEARCH BY NAME OR SN (FULLY WORKING) -->
+                <!-- Client Report -->
                 <div x-show="activeReport === 'client'">
                     <div class="bg-white p-4 rounded shadow">
-                        <div class="flex flex-wrap gap-2 mb-4">
-                            <input type="text" x-model="searchNameOrSN" placeholder="Search by Client Name or Serial Number (SN)" class="border p-2 rounded w-80" @keyup.enter="searchLoanByNameOrSN()">
-                            <button @click="searchLoanByNameOrSN()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Search</button>
-                            <button @click="clearClientSearch()" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Clear</button>
+                        <div class="flex space-x-2 mb-4">
+                            <input type="number" x-model="searchSN" placeholder="Enter Loan SN" class="border p-2 rounded w-64">
+                            <button @click="searchLoan" class="bg-indigo-600 text-white px-4 py-2 rounded">Search</button>
                         </div>
-                        
-                        <!-- Show Results -->
-                        <div x-show="selectedClientLoans.length > 0">
-                            <h2 class="text-xl font-semibold mb-2">Loan Records for "<span x-text="searchNameOrSN"></span>"</h2>
-                            <p class="text-sm text-gray-600 mb-2">✓ Customer may have multiple loans with different serial numbers.</p>
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full border">
-                                    <thead class="bg-gray-50">
-                                        <tr><th class="px-4 py-2">SN (Serial No.)</th><th>Client Name</th><th>Amount (₦)</th><th>Balance (₦)</th><th>Date</th><th>Interest</th><th>Status</th><th>Actions</th></tr>
-                                    </thead>
-                                    <tbody>
-                                        <template x-for="loan in selectedClientLoans" :key="loan.id">
-                                            <tr class="border-t hover:bg-gray-50">
-                                                <td class="px-4 py-2 font-mono font-bold" x-text="loan.sn"></td>
-                                                <td x-text="loan.names"></td>
-                                                <td x-text="formatCurrency(loan.amount)"></td>
-                                                <td x-text="formatCurrency(loan.balance)" :class="{'text-red-600 font-bold': loan.balance > 0}"></td>
-                                                <td x-text="loan.date ? new Date(loan.date.seconds*1000).toLocaleDateString() : ''"></td>
-                                                <td x-text="formatCurrency(loan.interest || 0)"></td>
-                                                <td><span x-text="loan.balance <= 0 ? '✓ Fully Paid' : '⚠ Outstanding'" :class="{'text-green-600': loan.balance<=0, 'text-red-600': loan.balance>0}"></span></td>
-                                                <td><button @click="downloadClientPDF(loan)" class="bg-green-600 text-white px-2 py-1 rounded text-sm hover:bg-green-700">PDF</button></td>
-                                            </tr>
-                                        </template>
-                                    </tbody>
-                                </table>
+                        <template x-if="selectedLoan">
+                            <div>
+                                <h2 class="text-xl font-semibold mb-2">Loan Details</h2>
+                                <p><strong>SN:</strong> <span x-text="selectedLoan.sn"></span></p>
+                                <p><strong>Client:</strong> <span x-text="selectedLoan.names"></span></p>
+                                <p><strong>Balance:</strong> <span x-text="formatCurrency(selectedLoan.balance)"></span></p>
+                                <div class="mt-4 space-x-2">
+                                    <button @click="downloadClientPDF" class="bg-green-600 text-white px-4 py-2 rounded">Download PDF</button>
+                                    <button @click="downloadClientCSV" class="bg-blue-600 text-white px-4 py-2 rounded">Download CSV</button>
+                                </div>
                             </div>
-                            <div class="mt-4 flex gap-2">
-                                <button @click="downloadClientReportPDF()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">📄 Download All PDF</button>
-                                <button @click="exportClientReportCSV()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">📊 Export CSV</button>
-                            </div>
-                        </div>
-                        
-                        <!-- No Results Message -->
-                        <div x-show="selectedClientLoans.length === 0 && searchNameOrSN && searchNameOrSN !== ''" class="bg-amber-50 border border-amber-200 rounded p-4 text-center">
-                            <p class="text-amber-700">❌ No loans found for "<span x-text="searchNameOrSN"></span>"</p>
-                            <p class="text-amber-600 text-sm mt-1">Try a different client name or serial number (SN).</p>
-                        </div>
-                        
-                        <!-- Initial Empty State -->
-                        <div x-show="!searchNameOrSN || searchNameOrSN === ''" class="bg-gray-50 border border-gray-200 rounded p-4 text-center">
-                            <p class="text-gray-500">🔍 Enter a client name or any serial number (SN) to search</p>
-                            <p class="text-gray-400 text-sm mt-1">Example: "John" or "SN-001" - Shows all loans for that customer</p>
-                        </div>
+                        </template>
                     </div>
                 </div>
 
-                <!-- P&L Report (placeholder - original functionality) -->
+                <!-- P&L Report -->
                 <div x-show="activeReport === 'pl'">
                     <div class="bg-white p-4 rounded shadow">
-                        <div class="flex flex-wrap gap-2 mb-4">
-                            <select x-model="period" class="border p-2 rounded"><option value="all">All Time</option><option value="year">This Year</option><option value="12months">Last 12 Months</option><option value="custom">Custom Range</option></select>
-                            <template x-if="period === 'custom'"><span><input type="date" x-model="startDate" class="border p-2 rounded"><input type="date" x-model="endDate" class="border p-2 rounded"></span></template>
-                            <button @click="computePL()" class="bg-indigo-600 text-white px-4 py-2 rounded">Generate Report</button>
-                            <button @click="downloadPLPDF()" class="bg-green-600 text-white px-4 py-2 rounded">PDF</button>
-                            <button @click="downloadPLCSV()" class="bg-blue-600 text-white px-4 py-2 rounded">CSV</button>
+                        <div class="flex space-x-4 mb-4">
+                            <select x-model="period" class="border p-2 rounded">
+                                <option value="all">All Time</option>
+                                <option value="year">This Year</option>
+                                <option value="12months">Last 12 Months</option>
+                                <option value="custom">Custom Range</option>
+                            </select>
+                            <template x-if="period === 'custom'">
+                                <span>
+                                    <input type="date" x-model="startDate" class="border p-2 rounded">
+                                    <input type="date" x-model="endDate" class="border p-2 rounded">
+                                </span>
+                            </template>
+                            <button @click="computePL" class="bg-indigo-600 text-white px-4 py-2 rounded">Generate Report</button>
+                            <button @click="downloadPLPDF" class="bg-green-600 text-white px-4 py-2 rounded">PDF</button>
+                            <button @click="downloadPLCSV" class="bg-blue-600 text-white px-4 py-2 rounded">CSV</button>
                         </div>
-                        <div x-show="plData" class="text-center text-gray-500">P&L Report Generated (Full functionality available with Firebase)</div>
-                        <div x-show="!plData" class="text-center text-gray-400">Click Generate Report to view Profit & Loss</div>
+                        
+                        <template x-if="plData">
+                            <div class="mt-4">
+                                <h2 class="text-xl font-bold mb-2">Profit & Loss Statement</h2>
+                                <p class="text-sm text-gray-600 mb-4" x-text="'Period: ' + (period === 'all' ? 'All Time' : period === 'year' ? 'This Year' : period === '12months' ? 'Last 12 Months' : startDate + ' to ' + endDate)"></p>
+                                
+                                <!-- Revenue Section -->
+                                <div class="mb-4">
+                                    <h3 class="text-lg font-semibold bg-gray-100 p-2">REVENUE</h3>
+                                    <table class="min-w-full">
+                                        <tr @dblclick="showInterestDetails" class="cursor-pointer hover:bg-gray-50">
+                                            <td class="py-1">Interest Income</td>
+                                            <td class="text-right" x-text="formatCurrency(plData.revenue?.interest || 0)"></td>
+                                        </tr>
+                                        <tr @dblclick="showAdminFeesDetails" class="cursor-pointer hover:bg-gray-50">
+                                            <td class="py-1">Admin Fees</td>
+                                            <td class="text-right" x-text="formatCurrency(plData.revenue?.adminFees || 0)"></td>
+                                        </tr>
+                                        <tr @dblclick="showPenaltyDetails" class="cursor-pointer hover:bg-gray-50">
+                                            <td class="py-1">Penalty Income</td>
+                                            <td class="text-right" x-text="formatCurrency(plData.revenue?.penalty || 0)"></td>
+                                        </tr>
+                                        <template x-for="(amt, cat) in plData.otherIncome" :key="cat">
+                                            <tr @dblclick="showOtherIncomeDetails(cat)" class="cursor-pointer hover:bg-gray-50">
+                                                <td class="py-1" x-text="cat"></td>
+                                                <td class="text-right" x-text="formatCurrency(amt)"></td>
+                                            </tr>
+                                        </template>
+                                        <tr class="font-bold border-t">
+                                            <td class="py-2">Total Revenue</td>
+                                            <td class="text-right" x-text="formatCurrency(plData.totalRevenue || 0)"></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                
+                                <!-- Expenses Section -->
+                                <div class="mb-4">
+                                    <h3 class="text-lg font-semibold bg-gray-100 p-2">EXPENSES</h3>
+                                    <table class="min-w-full">
+                                        <template x-for="(amt, cat) in plData.expenses" :key="cat">
+                                            <tr @dblclick="showExpenseDetails(cat)" class="cursor-pointer hover:bg-gray-50">
+                                                <td class="py-1" x-text="cat"></td>
+                                                <td class="text-right" x-text="formatCurrency(amt)"></td>
+                                            </tr>
+                                        </template>
+                                        <tr class="font-bold border-t">
+                                            <td class="py-2">Total Expenses</td>
+                                            <td class="text-right" x-text="formatCurrency(plData.totalExpenses || 0)"></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                
+                                <!-- Net Operating Profit -->
+                                <div class="mb-4 p-2 border rounded">
+                                    <p class="text-lg"><span class="font-semibold">Net Operating Profit / (Loss):</span> <span :class="{'text-green-600': plData.netOperating >= 0, 'text-red-600': plData.netOperating < 0}" x-text="formatCurrency(plData.netOperating || 0)"></span></p>
+                                </div>
+                                
+                                <!-- Equity Section -->
+                                <div class="mb-4">
+                                    <h3 class="text-lg font-semibold bg-gray-100 p-2">OWNER'S EQUITY (NET)</h3>
+                                    <table class="min-w-full">
+                                        <template x-for="(amt, owner) in plData.equityPerOwner" :key="owner">
+                                            <tr>
+                                                <td class="py-1" x-text="owner"></td>
+                                                <td class="text-right" x-text="formatCurrency(amt)"></td>
+                                            </tr>
+                                        </template>
+                                        <tr class="font-bold border-t">
+                                            <td class="py-2">Total Net Equity</td>
+                                            <td class="text-right" x-text="formatCurrency(plData.totalEquity || 0)"></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                
+                                <!-- Final Position -->
+                                <div class="mt-4 p-3 bg-gray-50 rounded text-center">
+                                    <p class="text-xl font-bold"><span class="font-semibold">Final Net Position:</span> <span :class="{'text-green-600': plData.finalPosition >= 0, 'text-red-600': plData.finalPosition < 0}" x-text="formatCurrency(plData.finalPosition || 0)"></span></p>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
 
-                <!-- Outstanding Balances -->
+                <!-- Outstanding Balances Report (with Print All button) -->
                 <div x-show="activeReport === 'outstanding'">
                     <div class="bg-white p-4 rounded shadow">
-                        <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">Outstanding Balances</h2><button @click="printAllOutstanding()" class="bg-green-600 text-white px-4 py-2 rounded">Print All</button></div>
-                        <p class="text-lg font-semibold mb-4">Total Outstanding: <span x-text="formatCurrency(totalOutstandingAmount)"></span></p>
-                        <div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th>Client Name</th><th>Total Outstanding</th><th>Loans</th><th>Actions</th></tr></thead><tbody><template x-for="client in outstandingList"><tr><td x-text="client.name"></td><td class="text-right" x-text="formatCurrency(client.totalBalance)"><td><td class="text-center" x-text="client.loans.length"></td><td class="text-center"><button @click="viewOutstandingClient(client)" class="text-indigo-600">View</button></td></tr></template><tr x-show="outstandingList.length === 0"><td colspan="4" class="text-center py-4 text-gray-500">No outstanding balances</td></tr></tbody></table></div>
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">Clients with Outstanding Balances</h2>
+                            <button @click="printAllOutstanding" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Print All Report</button>
+                        </div>
+
+                        <!-- NEW: Total Outstanding Amount Summary -->
+                        <p class="text-lg font-semibold mb-4">
+                            Total Outstanding: <span x-text="formatCurrency(totalOutstandingAmount)"></span>
+                        </p>
+
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead>
+                                    <tr>
+                                        <th class="text-left">Client Name</th>
+                                        <th class="text-right">Total Outstanding</th>
+                                        <th class="text-center">Number of Loans</th>
+                                        <th class="text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="client in outstandingList" :key="client.name">
+                                        <tr class="border-t cursor-pointer hover:bg-gray-50" @click="viewOutstandingClient(client)">
+                                            <td class="py-2" x-text="client.name"></td>
+                                            <td class="text-right" x-text="formatCurrency(client.totalBalance)"></td>
+                                            <td class="text-center" x-text="client.loans.length"></td>
+                                            <td class="text-center">
+                                                <button @click.stop="viewOutstandingClient(client)" class="text-indigo-600 mr-2">View</button>
+                                                <button @click.stop="selectedOutstandingClient = client; printOutstandingClientStatement()" class="text-green-600">Print</button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                    <tr x-show="outstandingList.length === 0">
+                                        <td colspan="4" class="text-center py-4 text-gray-500">No outstanding balances</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Outstanding Detail Modal -->
-                <div x-show="showOutstandingDetail" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" style="display: none;" x-cloak>
-                    <div class="bg-white rounded-lg p-6 max-w-4xl w-full max-h-screen overflow-auto">
-                        <div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold" x-text="selectedOutstandingClient?.name"></h2><button @click="showOutstandingDetail=false" class="text-gray-500 text-xl">&times;</button></div>
-                        <div class="mb-4"><p class="text-lg">Total Outstanding: <span class="font-bold" x-text="formatCurrency(selectedOutstandingClient?.totalBalance)"></span></p></div>
-                        <table class="min-w-full border"><thead><tr><th>SN</th><th>Date</th><th>Amount</th><th>Balance</th></tr></thead><tbody><template x-for="loan in selectedOutstandingClient?.loans"><tr><td x-text="loan.sn"></td><td x-text="loan.date ? new Date(loan.date.seconds*1000).toLocaleDateString() : ''"></td><td x-text="formatCurrency(loan.amount)"></td><td x-text="formatCurrency(loan.balance)"></td></tr></template></tbody></table>
+                <!-- Outstanding Client Detail Modal -->
+                <div x-show="showOutstandingDetail" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-lg p-6 max-w-4xl w-full max-h-screen overflow-y-auto">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-2xl font-bold" x-text="selectedOutstandingClient?.name"></h2>
+                            <button @click="showOutstandingDetail = false" class="text-gray-500 hover:text-gray-700">✕</button>
+                        </div>
+                        <div class="mb-4 flex justify-between items-center">
+                            <p class="text-lg">Total Outstanding: <span class="font-bold" x-text="formatCurrency(selectedOutstandingClient?.totalBalance)"></span></p>
+                            <button @click="printOutstandingClientStatement" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Print Statement</button>
+                        </div>
+                        <table class="min-w-full border">
+                            <thead>
+                                <tr>
+                                    <th class="px-4 py-2 text-left">SN</th>
+                                    <th class="px-4 py-2 text-left">Date</th>
+                                    <th class="px-4 py-2 text-right">Amount</th>
+                                    <th class="px-4 py-2 text-right">Balance</th>
+                                    <th class="px-4 py-2 text-right">Rate</th>
+                                    <th class="px-4 py-2 text-right">Duration</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="loan in selectedOutstandingClient?.loans" :key="loan.id">
+                                    <tr>
+                                        <td class="border px-4 py-2" x-text="loan.sn"></td>
+                                        <td class="border px-4 py-2" x-text="loan.date?.toDate().toLocaleDateString()"></td>
+                                        <td class="border px-4 py-2 text-right" x-text="formatCurrency(loan.amount)"></td>
+                                        <td class="border px-4 py-2 text-right" x-text="formatCurrency(loan.balance)"></td>
+                                        <td class="border px-4 py-2 text-right" x-text="loan.int_rate + '%'"></td>
+                                        <td class="border px-4 py-2 text-right" x-text="loan.duration"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-            </div>
-        </template>
+
+                <!-- Drill‑down Modal -->
+                <div x-show="showDrillDown" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-lg p-6 max-w-4xl w-full max-h-screen overflow-y-auto">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-2xl font-bold" x-text="drillDownTitle"></h2>
+                            <button @click="showDrillDown = false" class="text-gray-500 hover:text-gray-700">✕</button>
+                        </div>
+                        <div class="mb-4">
+                            <button @click="printDrillDown" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Export CSV</button>
+                        </div>
+                        <table class="min-w-full border">
+                            <thead>
+                                <tr>
+                                    <template x-for="(value, key) in drillDownData[0]" :key="key">
+                                        <th class="px-4 py-2 text-left capitalize" x-text="key"></th>
+                                    </template>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="(item, idx) in drillDownData" :key="idx">
+                                    <tr>
+                                        <template x-for="(value, key) in item" :key="key">
+                                            <td class="border px-4 py-2">
+                                                <template x-if="key === 'amount'">
+                                                    <span x-text="formatCurrency(value)"></span>
+                                                </template>
+                                                <template x-if="key !== 'amount'">
+                                                    <span x-text="value"></span>
+                                                </template>
+                                            </td>
+                                        </template>
                                     </tr>
                                 </template>
                             </tbody>
