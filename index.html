@@ -447,7 +447,7 @@
             </div>
         </template>
 
-        <!-- Expenses & Income & Equity Page - ADDED NEW EXPENSE CATEGORIES -->
+        <!-- Expenses & Income & Equity Page - WITH NEW EXPENSE CATEGORIES ADDED -->
         <template x-if="page === 'expenses'">
             <div x-data="expenses" x-init="init" class="space-y-6">
                 <h1 class="text-3xl font-bold">Expenses, Income & Equity</h1>
@@ -457,7 +457,7 @@
                     <button @click="activeTab='equity'" :class="{'font-bold border-b-2 border-indigo-600': activeTab==='equity'}" class="pb-2 px-4">Equity</button>
                 </div>
 
-                <!-- Expenses Tab - WITH NEW CATEGORIES ADDED -->
+                <!-- Expenses Tab - WITH NEW CATEGORIES -->
                 <div x-show="activeTab === 'expenses'">
                     <form @submit.prevent="addExpense" class="bg-white p-4 rounded shadow mb-4 grid grid-cols-1 md:grid-cols-5 gap-2">
                         <select x-model="expenseForm.category" required class="border p-2 rounded">
@@ -673,7 +673,7 @@
                     </div>
                 </div>
 
-                <!-- Edit Expense Modal - WITH NEW CATEGORIES ADDED -->
+                <!-- Edit Expense Modal - WITH NEW CATEGORIES -->
                 <div x-show="showExpenseEditModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                     <div class="bg-white rounded-lg p-6 max-w-md w-full">
                         <h2 class="text-xl font-bold mb-4">Edit Expense</h2>
@@ -758,7 +758,7 @@
             </div>
         </template>
 
-        <!-- Reports Page - ENHANCED: search by name AND serial number (customer may have multiple SNs) -->
+        <!-- Reports Page - ENHANCED: Client Report searches by Name OR Serial Number -->
         <template x-if="page === 'reports'">
             <div x-data="reports" x-init="init" class="space-y-6">
                 <h1 class="text-3xl font-bold">Reports</h1>
@@ -768,7 +768,7 @@
                     <button @click="activeReport='outstanding'; loadOutstanding()" :class="{'font-bold border-b-2 border-indigo-600': activeReport==='outstanding'}" class="pb-2 px-4">Outstanding Balances</button>
                 </div>
 
-                <!-- Client Report - ENHANCED: search by Name OR Serial Number -->
+                <!-- Client Report - ENHANCED: Search by Name OR Serial Number -->
                 <div x-show="activeReport === 'client'">
                     <div class="bg-white p-4 rounded shadow">
                         <div class="flex space-x-2 mb-4">
@@ -776,7 +776,7 @@
                             <button @click="searchLoanByNameOrSN" class="bg-indigo-600 text-white px-4 py-2 rounded">Search</button>
                             <button @click="clearClientSearch" class="bg-gray-500 text-white px-4 py-2 rounded">Clear</button>
                         </div>
-                        <template x-if="searchedClientLoans.length > 0">
+                        <template x-if="selectedClientLoans && selectedClientLoans.length > 0">
                             <div>
                                 <h2 class="text-xl font-semibold mb-2">Loan Records for "<span x-text="searchNameOrSN"></span>"</h2>
                                 <p class="text-sm text-gray-600 mb-2">Note: A customer may have multiple loans with different serial numbers.</p>
@@ -784,7 +784,7 @@
                                     <table class="min-w-full border">
                                         <thead class="bg-gray-50"><tr><th class="px-4 py-2">SN</th><th>Client Name</th><th>Amount</th><th>Balance</th><th>Date</th><th>Interest</th><th>Status</th><th>Actions</th></tr></thead>
                                         <tbody>
-                                            <template x-for="loan in searchedClientLoans" :key="loan.id">
+                                            <template x-for="loan in selectedClientLoans" :key="loan.id">
                                                 <tr class="border-t">
                                                     <td class="px-4 py-2 font-mono" x-text="loan.sn"></td>
                                                     <td x-text="loan.names"></td>
@@ -793,7 +793,7 @@
                                                     <td x-text="loan.date ? new Date(loan.date.seconds*1000).toLocaleDateString() : ''"></td>
                                                     <td x-text="formatCurrency(loan.interest || 0)"></td>
                                                     <td><span x-text="loan.balance <= 0 ? 'Fully Paid' : 'Outstanding'" :class="{'text-green-600': loan.balance<=0, 'text-red-600': loan.balance>0}"></span></td>
-                                                    <td><button @click="downloadSingleClientPDF(loan)" class="text-blue-600 text-sm">PDF</button></td>
+                                                    <td><button @click="downloadClientPDF(loan)" class="bg-green-600 text-white px-2 py-1 rounded text-sm">PDF</button></td>
                                                 </tr>
                                             </template>
                                         </tbody>
@@ -805,10 +805,10 @@
                                 </div>
                             </div>
                         </template>
-                        <template x-if="searchedClientLoans.length === 0 && searchNameOrSN !== ''">
+                        <template x-if="selectedClientLoans && selectedClientLoans.length === 0 && searchNameOrSN !== ''">
                             <div class="text-amber-600 bg-amber-50 p-3 rounded">No loans found for "<span x-text="searchNameOrSN"></span>". Try a different name or serial number.</div>
                         </template>
-                        <div x-show="searchNameOrSN === ''" class="text-gray-500 text-center py-4">Enter client name or any serial number (SN) to see all loans associated with that customer (including multiple SNs).</div>
+                        <div x-show="!searchNameOrSN || searchNameOrSN === ''" class="text-gray-500 text-center py-4">Enter client name or any serial number (SN) to see all loans associated with that customer (including multiple SNs).</div>
                     </div>
                 </div>
 
@@ -923,7 +923,6 @@
                             <button @click="printAllOutstanding" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Print All Report</button>
                         </div>
 
-                        <!-- NEW: Total Outstanding Amount Summary -->
                         <p class="text-lg font-semibold mb-4">
                             Total Outstanding: <span x-text="formatCurrency(totalOutstandingAmount)"></span>
                         </p>
