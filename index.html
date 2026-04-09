@@ -759,6 +759,7 @@
         </template>
 
         <!-- Reports Page - ENHANCED: Client Report searches by Name OR Serial Number -->
+                <!-- Reports Page (with Outstanding Balances tab) - FIXED: Search by Name or SN -->
         <template x-if="page === 'reports'">
             <div x-data="reports" x-init="init" class="space-y-6">
                 <h1 class="text-3xl font-bold">Reports</h1>
@@ -805,7 +806,7 @@
                                 </div>
                             </div>
                         </template>
-                        <template x-if="selectedClientLoans && selectedClientLoans.length === 0 && searchNameOrSN !== ''">
+                        <template x-if="selectedClientLoans && selectedClientLoans.length === 0 && searchNameOrSN && searchNameOrSN !== ''">
                             <div class="text-amber-600 bg-amber-50 p-3 rounded">No loans found for "<span x-text="searchNameOrSN"></span>". Try a different name or serial number.</div>
                         </template>
                         <div x-show="!searchNameOrSN || searchNameOrSN === ''" class="text-gray-500 text-center py-4">Enter client name or any serial number (SN) to see all loans associated with that customer (including multiple SNs).</div>
@@ -838,195 +839,57 @@
                                 <h2 class="text-xl font-bold mb-2">Profit & Loss Statement</h2>
                                 <p class="text-sm text-gray-600 mb-4" x-text="'Period: ' + (period === 'all' ? 'All Time' : period === 'year' ? 'This Year' : period === '12months' ? 'Last 12 Months' : startDate + ' to ' + endDate)"></p>
                                 
-                                <!-- Revenue Section -->
                                 <div class="mb-4">
                                     <h3 class="text-lg font-semibold bg-gray-100 p-2">REVENUE</h3>
                                     <table class="min-w-full">
-                                        <tr @dblclick="showInterestDetails" class="cursor-pointer hover:bg-gray-50">
-                                            <td class="py-1">Interest Income</td>
-                                            <td class="text-right" x-text="formatCurrency(plData.revenue?.interest || 0)"></td>
-                                        </tr>
-                                        <tr @dblclick="showAdminFeesDetails" class="cursor-pointer hover:bg-gray-50">
-                                            <td class="py-1">Admin Fees</td>
-                                            <td class="text-right" x-text="formatCurrency(plData.revenue?.adminFees || 0)"></td>
-                                        </tr>
-                                        <tr @dblclick="showPenaltyDetails" class="cursor-pointer hover:bg-gray-50">
-                                            <td class="py-1">Penalty Income</td>
-                                            <td class="text-right" x-text="formatCurrency(plData.revenue?.penalty || 0)"></td>
-                                        </tr>
-                                        <template x-for="(amt, cat) in plData.otherIncome" :key="cat">
-                                            <tr @dblclick="showOtherIncomeDetails(cat)" class="cursor-pointer hover:bg-gray-50">
-                                                <td class="py-1" x-text="cat"></td>
-                                                <td class="text-right" x-text="formatCurrency(amt)"></td>
-                                            </tr>
-                                        </template>
-                                        <tr class="font-bold border-t">
-                                            <td class="py-2">Total Revenue</td>
-                                            <td class="text-right" x-text="formatCurrency(plData.totalRevenue || 0)"></td>
-                                        </tr>
+                                        <tr @dblclick="showInterestDetails" class="cursor-pointer hover:bg-gray-50"><td class="py-1">Interest Income</td><td class="text-right" x-text="formatCurrency(plData.revenue?.interest || 0)"></td></tr>
+                                        <tr @dblclick="showAdminFeesDetails" class="cursor-pointer hover:bg-gray-50"><td class="py-1">Admin Fees</td><td class="text-right" x-text="formatCurrency(plData.revenue?.adminFees || 0)"></td></tr>
+                                        <tr @dblclick="showPenaltyDetails" class="cursor-pointer hover:bg-gray-50"><td class="py-1">Penalty Income</td><td class="text-right" x-text="formatCurrency(plData.revenue?.penalty || 0)"></td></tr>
+                                        <template x-for="(amt, cat) in plData.otherIncome" :key="cat"><tr @dblclick="showOtherIncomeDetails(cat)" class="cursor-pointer hover:bg-gray-50"><td class="py-1" x-text="cat"></td><td class="text-right" x-text="formatCurrency(amt)"></td></tr></template>
+                                        <tr class="font-bold border-t"><td class="py-2">Total Revenue</td><td class="text-right" x-text="formatCurrency(plData.totalRevenue || 0)"></td></tr>
                                     </table>
                                 </div>
                                 
-                                <!-- Expenses Section -->
                                 <div class="mb-4">
                                     <h3 class="text-lg font-semibold bg-gray-100 p-2">EXPENSES</h3>
                                     <table class="min-w-full">
-                                        <template x-for="(amt, cat) in plData.expenses" :key="cat">
-                                            <tr @dblclick="showExpenseDetails(cat)" class="cursor-pointer hover:bg-gray-50">
-                                                <td class="py-1" x-text="cat"></td>
-                                                <td class="text-right" x-text="formatCurrency(amt)"></td>
-                                            </tr>
-                                        </template>
-                                        <tr class="font-bold border-t">
-                                            <td class="py-2">Total Expenses</td>
-                                            <td class="text-right" x-text="formatCurrency(plData.totalExpenses || 0)"></td>
-                                        </tr>
+                                        <template x-for="(amt, cat) in plData.expenses" :key="cat"><tr @dblclick="showExpenseDetails(cat)" class="cursor-pointer hover:bg-gray-50"><td class="py-1" x-text="cat"></td><td class="text-right" x-text="formatCurrency(amt)"></td></tr></template>
+                                        <tr class="font-bold border-t"><td class="py-2">Total Expenses</td><td class="text-right" x-text="formatCurrency(plData.totalExpenses || 0)"></td></tr>
                                     </table>
                                 </div>
                                 
-                                <!-- Net Operating Profit -->
-                                <div class="mb-4 p-2 border rounded">
-                                    <p class="text-lg"><span class="font-semibold">Net Operating Profit / (Loss):</span> <span :class="{'text-green-600': plData.netOperating >= 0, 'text-red-600': plData.netOperating < 0}" x-text="formatCurrency(plData.netOperating || 0)"></span></p>
-                                </div>
+                                <div class="mb-4 p-2 border rounded"><p class="text-lg"><span class="font-semibold">Net Operating Profit / (Loss):</span> <span :class="{'text-green-600': plData.netOperating >= 0, 'text-red-600': plData.netOperating < 0}" x-text="formatCurrency(plData.netOperating || 0)"></span></p></div>
                                 
-                                <!-- Equity Section -->
                                 <div class="mb-4">
                                     <h3 class="text-lg font-semibold bg-gray-100 p-2">OWNER'S EQUITY (NET)</h3>
                                     <table class="min-w-full">
-                                        <template x-for="(amt, owner) in plData.equityPerOwner" :key="owner">
-                                            <tr>
-                                                <td class="py-1" x-text="owner"></td>
-                                                <td class="text-right" x-text="formatCurrency(amt)"></td>
-                                            </tr>
-                                        </template>
-                                        <tr class="font-bold border-t">
-                                            <td class="py-2">Total Net Equity</td>
-                                            <td class="text-right" x-text="formatCurrency(plData.totalEquity || 0)"></td>
-                                        </tr>
+                                        <template x-for="(amt, owner) in plData.equityPerOwner" :key="owner"><tr><td class="py-1" x-text="owner"></td><td class="text-right" x-text="formatCurrency(amt)"></td></tr></template>
+                                        <tr class="font-bold border-t"><td class="py-2">Total Net Equity</td><td class="text-right" x-text="formatCurrency(plData.totalEquity || 0)"></td></tr>
                                     </table>
                                 </div>
                                 
-                                <!-- Final Position -->
-                                <div class="mt-4 p-3 bg-gray-50 rounded text-center">
-                                    <p class="text-xl font-bold"><span class="font-semibold">Final Net Position:</span> <span :class="{'text-green-600': plData.finalPosition >= 0, 'text-red-600': plData.finalPosition < 0}" x-text="formatCurrency(plData.finalPosition || 0)"></span></p>
-                                </div>
+                                <div class="mt-4 p-3 bg-gray-50 rounded text-center"><p class="text-xl font-bold"><span class="font-semibold">Final Net Position:</span> <span :class="{'text-green-600': plData.finalPosition >= 0, 'text-red-600': plData.finalPosition < 0}" x-text="formatCurrency(plData.finalPosition || 0)"></span></p></div>
                             </div>
                         </template>
                     </div>
                 </div>
 
-                <!-- Outstanding Balances Report (with Print All button) -->
+                <!-- Outstanding Balances Report -->
                 <div x-show="activeReport === 'outstanding'">
                     <div class="bg-white p-4 rounded shadow">
-                        <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-xl font-bold">Clients with Outstanding Balances</h2>
-                            <button @click="printAllOutstanding" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Print All Report</button>
-                        </div>
-
-                        <p class="text-lg font-semibold mb-4">
-                            Total Outstanding: <span x-text="formatCurrency(totalOutstandingAmount)"></span>
-                        </p>
-
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full">
-                                <thead>
-                                    <tr>
-                                        <th class="text-left">Client Name</th>
-                                        <th class="text-right">Total Outstanding</th>
-                                        <th class="text-center">Number of Loans</th>
-                                        <th class="text-center">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <template x-for="client in outstandingList" :key="client.name">
-                                        <tr class="border-t cursor-pointer hover:bg-gray-50" @click="viewOutstandingClient(client)">
-                                            <td class="py-2" x-text="client.name"></td>
-                                            <td class="text-right" x-text="formatCurrency(client.totalBalance)"></td>
-                                            <td class="text-center" x-text="client.loans.length"></td>
-                                            <td class="text-center">
-                                                <button @click.stop="viewOutstandingClient(client)" class="text-indigo-600 mr-2">View</button>
-                                                <button @click.stop="selectedOutstandingClient = client; printOutstandingClientStatement()" class="text-green-600">Print</button>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                    <tr x-show="outstandingList.length === 0">
-                                        <td colspan="4" class="text-center py-4 text-gray-500">No outstanding balances</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                        <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">Clients with Outstanding Balances</h2><button @click="printAllOutstanding" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Print All Report</button></div>
+                        <p class="text-lg font-semibold mb-4">Total Outstanding: <span x-text="formatCurrency(totalOutstandingAmount)"></span></p>
+                        <div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th class="text-left">Client Name</th><th class="text-right">Total Outstanding</th><th class="text-center">Number of Loans</th><th class="text-center">Actions</th></tr></thead><tbody><template x-for="client in outstandingList" :key="client.name"><tr class="border-t cursor-pointer hover:bg-gray-50" @click="viewOutstandingClient(client)"><td class="py-2" x-text="client.name"></td><td class="text-right" x-text="formatCurrency(client.totalBalance)"></td><td class="text-center" x-text="client.loans.length"></td><td class="text-center"><button @click.stop="viewOutstandingClient(client)" class="text-indigo-600 mr-2">View</button><button @click.stop="selectedOutstandingClient = client; printOutstandingClientStatement()" class="text-green-600">Print</button></td></tr></template><tr x-show="outstandingList.length === 0"><td colspan="4" class="text-center py-4 text-gray-500">No outstanding balances</td></tr></tbody></table></div>
                     </div>
                 </div>
 
                 <!-- Outstanding Client Detail Modal -->
-                <div x-show="showOutstandingDetail" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div class="bg-white rounded-lg p-6 max-w-4xl w-full max-h-screen overflow-y-auto">
-                        <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-2xl font-bold" x-text="selectedOutstandingClient?.name"></h2>
-                            <button @click="showOutstandingDetail = false" class="text-gray-500 hover:text-gray-700">✕</button>
-                        </div>
-                        <div class="mb-4 flex justify-between items-center">
-                            <p class="text-lg">Total Outstanding: <span class="font-bold" x-text="formatCurrency(selectedOutstandingClient?.totalBalance)"></span></p>
-                            <button @click="printOutstandingClientStatement" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Print Statement</button>
-                        </div>
-                        <table class="min-w-full border">
-                            <thead>
-                                <tr>
-                                    <th class="px-4 py-2 text-left">SN</th>
-                                    <th class="px-4 py-2 text-left">Date</th>
-                                    <th class="px-4 py-2 text-right">Amount</th>
-                                    <th class="px-4 py-2 text-right">Balance</th>
-                                    <th class="px-4 py-2 text-right">Rate</th>
-                                    <th class="px-4 py-2 text-right">Duration</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="loan in selectedOutstandingClient?.loans" :key="loan.id">
-                                    <tr>
-                                        <td class="border px-4 py-2" x-text="loan.sn"></td>
-                                        <td class="border px-4 py-2" x-text="loan.date?.toDate().toLocaleDateString()"></td>
-                                        <td class="border px-4 py-2 text-right" x-text="formatCurrency(loan.amount)"></td>
-                                        <td class="border px-4 py-2 text-right" x-text="formatCurrency(loan.balance)"></td>
-                                        <td class="border px-4 py-2 text-right" x-text="loan.int_rate + '%'"></td>
-                                        <td class="border px-4 py-2 text-right" x-text="loan.duration"></td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <div x-show="showOutstandingDetail" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"><div class="bg-white rounded-lg p-6 max-w-4xl w-full max-h-screen overflow-y-auto"><div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold" x-text="selectedOutstandingClient?.name"></h2><button @click="showOutstandingDetail = false" class="text-gray-500 hover:text-gray-700">✕</button></div><div class="mb-4 flex justify-between items-center"><p class="text-lg">Total Outstanding: <span class="font-bold" x-text="formatCurrency(selectedOutstandingClient?.totalBalance)"></span></p><button @click="printOutstandingClientStatement" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Print Statement</button></div><table class="min-w-full border"><thead><tr><th class="px-4 py-2 text-left">SN</th><th class="px-4 py-2 text-left">Date</th><th class="px-4 py-2 text-right">Amount</th><th class="px-4 py-2 text-right">Balance</th><th class="px-4 py-2 text-right">Rate</th><th class="px-4 py-2 text-right">Duration</th></tr></thead><tbody><template x-for="loan in selectedOutstandingClient?.loans" :key="loan.id"><tr><td class="border px-4 py-2" x-text="loan.sn"></td><td class="border px-4 py-2" x-text="loan.date?.toDate().toLocaleDateString()"></td><td class="border px-4 py-2 text-right" x-text="formatCurrency(loan.amount)"></td><td class="border px-4 py-2 text-right" x-text="formatCurrency(loan.balance)"></td><td class="border px-4 py-2 text-right" x-text="loan.int_rate + '%'"></td><td class="border px-4 py-2 text-right" x-text="loan.duration"></td></tr></template></tbody></table></div></div>
 
                 <!-- Drill‑down Modal -->
-                <div x-show="showDrillDown" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div class="bg-white rounded-lg p-6 max-w-4xl w-full max-h-screen overflow-y-auto">
-                        <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-2xl font-bold" x-text="drillDownTitle"></h2>
-                            <button @click="showDrillDown = false" class="text-gray-500 hover:text-gray-700">✕</button>
-                        </div>
-                        <div class="mb-4">
-                            <button @click="printDrillDown" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Export CSV</button>
-                        </div>
-                        <table class="min-w-full border">
-                            <thead>
-                                <tr>
-                                    <template x-for="(value, key) in drillDownData[0]" :key="key">
-                                        <th class="px-4 py-2 text-left capitalize" x-text="key"></th>
-                                    </template>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="(item, idx) in drillDownData" :key="idx">
-                                    <tr>
-                                        <template x-for="(value, key) in item" :key="key">
-                                            <td class="border px-4 py-2">
-                                                <template x-if="key === 'amount'">
-                                                    <span x-text="formatCurrency(value)"></span>
-                                                </template>
-                                                <template x-if="key !== 'amount'">
-                                                    <span x-text="value"></span>
-                                                </template>
-                                            </td>
-                                        </template>
+                <div x-show="showDrillDown" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"><div class="bg-white rounded-lg p-6 max-w-4xl w-full max-h-screen overflow-y-auto"><div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold" x-text="drillDownTitle"></h2><button @click="showDrillDown = false" class="text-gray-500 hover:text-gray-700">✕</button></div><div class="mb-4"><button @click="printDrillDown" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Export CSV</button></div><table class="min-w-full border"><thead><tr><template x-for="(value, key) in drillDownData[0]" :key="key"><th class="px-4 py-2 text-left capitalize" x-text="key"></th></template></tr></thead><tbody><template x-for="(item, idx) in drillDownData" :key="idx"><tr><template x-for="(value, key) in item" :key="key"><td class="border px-4 py-2"><template x-if="key === 'amount'"><span x-text="formatCurrency(value)"></span></template><template x-if="key !== 'amount'"><span x-text="value"></span></template></td></template></tr></template></tbody></table></div></div>
+            </div>
+        </template>
                                     </tr>
                                 </template>
                             </tbody>
