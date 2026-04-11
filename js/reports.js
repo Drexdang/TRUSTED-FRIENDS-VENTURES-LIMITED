@@ -20,6 +20,14 @@ document.addEventListener('alpine:init', () => {
         selectedOutstandingClient: null,
         showOutstandingDetail: false,
 
+        // Client search by name properties
+        clientNameSearch: '',
+        nameSearchResults: [],
+        selectedClientLoans: [],
+        selectedClientName: '',
+        selectedClientTotalOutstanding: 0,
+        searchMessage: '',
+
         // NEW: Computed property for total outstanding amount
         get totalOutstandingAmount() {
             return this.outstandingList.reduce((sum, client) => sum + client.totalBalance, 0);
@@ -268,6 +276,152 @@ document.addEventListener('alpine:init', () => {
                 'Final Position': this.plData.finalPosition
             };
             downloadCSV([flat], `profit_loss_${this.period}.csv`);
+        },
+
+        // Client search by name functions
+        async searchClientByName() {
+            if (!this.clientNameSearch.trim() || this.clientNameSearch.length < 2) {
+                this.nameSearchResults = [];
+                return;
+            }
+            
+            const searchTerm = this.clientNameSearch.toLowerCase().trim();
+            
+            try {
+                const snapshot = await db.collection('loans').get();
+                const clientMap = new Map();
+                
+                snapshot.forEach(doc => {
+                    const loan = { id: doc.id, ...doc.data() };
+                    if (loan.names && loan.names.toLowerCase().includes(searchTerm)) {
+                        if (!clientMap.has(loan.names)) {
+                            clientMap.set(loan.names, {
+                                name: loan.names,
+                                loanCount: 0,
+                                totalBalance: 0,
+                                loans: []
+                            });
+                        }
+                        const client = clientMap.get(loan.names);
+                        client.loanCount++;
+                        client.totalBalance += (loan.balance || 0);
+                        client.loans.push(loan);
+                    }
+                });
+                
+                this.nameSearchResults = Array.from(clientMap.values());
+                
+            } catch (error) {
+                console.error('Search error:', error);
+                this.showToast('Search failed: ' + error.message, 'error');
+            }
+        },
+        
+        selectClientByName(client) {
+            this.selectedClientName = client.name;
+            this.selectedClientLoans = client.loans;
+            this.selectedClientTotalOutstanding = client.totalBalance;
+            this.selectedLoan = null;
+            this.searchSN = '';
+            this.clientNameSearch = client.name;
+            this.nameSearchResults = [];
+            this.searchMessage = `Found ${client.loanCount} loan(s) for ${client.name}. Total outstanding: ${this.formatCurrency(client.totalBalance)}`;
+            
+            setTimeout(() => {
+                document.querySelector('.border-t.pt-4')?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        },
+        
+        viewSingleLoan(loan) {
+            this.selectedLoan = loan;
+            this.selectedClientLoans = [];
+            this.searchMessage = `Viewing loan SN: ${loan.sn} for ${loan.names}`;
+        },
+        
+        clearClientSearch() {
+            this.clientNameSearch = '';
+            this.nameSearchResults = [];
+            this.selectedClientLoans = [];
+            this.selectedClientName = '';
+            this.selectedLoan = null;
+            this.searchSN = '';
+            this.searchMessage = '';
+        },
+        
+        async downloadClientAllLoansPDF() {
+            if (!this.selectedClientLoans || this.selectedClientLoans.length === 0) return;
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            doc.setFontSize(18);
+            doc.text(`Loan Statement for ${this.selectedClientName}`, 14, 20);
+            doc.setFontSize(10);
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 30);
+            doc.text(`Total Outstanding: ${this.formatCurrency(this.selectedClientTotalOutstanding)}`, 14, 38);
+            
+            const tableData = this.selectedClientLoans.map(loan => [
+                loan.sn || '',
+                loan.date?.toDate().toLocaleDateString() || '',
+                this.formatCurrency(loan.amount || 0),
+                (loan.int_rate || 0) + '%',
+                this.formatCurrency(loan.amt_remitted || 0),
+                this.formatCurrency(loan.balance || 0)
+            ]);
+            
+            doc.autoTable({
+                startY: 45,
+                head: [['SN', 'Date', 'Amount', 'Rate', 'Paid', 'Balance']],
+                body: tableData,
+                theme: 'striped',
+                headStyles: { fillColor: [79, 70, 229] }
+            });
+            
+            doc.save(`${this.selectedClientName.replace(/\s/g, '_')}_Loans_Statement.pdf`);
+            this.showToast('PDF downloaded successfully', 'success');
+        },
+        
+        async downloadClientAllLoansCSV() {
+            if (!this.selectedClientLoans || this.selectedClientLoans.length === 0) return;
+            
+            const headers = ['SN', 'Date', 'Amount (₦)', 'Interest Rate (%)', 'Duration (months)', 'Admin Fees (₦)', 'Paid (₦)', 'Balance (₦)'];
+            
+            const rows = this.selectedClientLoans.map(loan => [
+                loan.sn || '',
+                loan.date?.toDate().toLocaleDateString() || '',
+                loan.amount || 0,
+                loan.int_rate || 0,
+                loan.duration || 0,
+                loan.admin_fees || 0,
+                loan.amt_remitted || 0,
+                loan.balance || 0
+            ]);
+            
+            const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${this.selectedClientName.replace(/\s/g, '_')}_Loans_Statement.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            this.showToast('CSV downloaded successfully', 'success');
+        },
+        
+        formatCurrency(amount) {
+            if (amount === undefined || amount === null) return '₦0.00';
+            return '₦' + amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+        
+        showToast(message, type) {
+            const toast = document.getElementById('toast');
+            if (toast) {
+                toast.textContent = message;
+                toast.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg text-white ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
+                toast.classList.remove('hidden');
+                setTimeout(() => toast.classList.add('hidden'), 3000);
+            }
         }
+
     }));
 });

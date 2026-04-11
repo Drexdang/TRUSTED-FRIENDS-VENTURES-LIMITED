@@ -762,22 +762,114 @@
                     <button @click="activeReport='outstanding'; loadOutstanding()" :class="{'font-bold border-b-2 border-indigo-600': activeReport==='outstanding'}" class="pb-2 px-4">Outstanding Balances</button>
                 </div>
 
-                <!-- Client Report -->
+                               <!-- Client Report - Search by Name or SN -->
                 <div x-show="activeReport === 'client'">
                     <div class="bg-white p-4 rounded shadow">
-                        <div class="flex space-x-2 mb-4">
-                            <input type="number" x-model="searchSN" placeholder="Enter Loan SN" class="border p-2 rounded w-64">
-                            <button @click="searchLoan" class="bg-indigo-600 text-white px-4 py-2 rounded">Search</button>
+                        <h2 class="text-lg font-semibold mb-3">Search Client Records</h2>
+                        
+                        <!-- Search by Name -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Search by Client Name:</label>
+                            <div class="flex space-x-2">
+                                <div class="relative flex-1">
+                                    <input type="text" 
+                                           x-model="clientNameSearch" 
+                                           @input.debounce.300ms="searchClientByName()"
+                                           @focus="searchClientByName()"
+                                           placeholder="Type client name..." 
+                                           class="border p-2 rounded w-full">
+                                    <div x-show="nameSearchResults.length > 0 && clientNameSearch.length >= 2" 
+                                         @click.outside="nameSearchResults = []"
+                                         class="absolute z-10 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                                        <template x-for="client in nameSearchResults" :key="client.name">
+                                            <div class="p-2 hover:bg-gray-100 cursor-pointer border-b" 
+                                                 @click="selectClientByName(client)">
+                                                <div class="font-medium" x-text="client.name"></div>
+                                                <div class="text-sm text-gray-600">
+                                                    <span x-text="client.loanCount + ' loan(s)'"></span> • 
+                                                    <span x-text="formatCurrency(client.totalBalance) + ' outstanding'"></span>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                                <button @click="clearClientSearch" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Clear</button>
+                            </div>
                         </div>
+                        
+                        <!-- OR Search by SN -->
+                        <div class="mb-4 border-t pt-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">OR Search by Loan SN:</label>
+                            <div class="flex space-x-2">
+                                <input type="text" x-model="searchSN" placeholder="Enter Loan SN" class="border p-2 rounded w-64">
+                                <button @click="searchLoan" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Search</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Search Results Summary -->
+                        <div x-show="searchMessage" class="mb-3 p-2 bg-blue-100 text-blue-700 rounded" x-text="searchMessage"></div>
+                        
+                        <!-- Loan Details Results -->
                         <template x-if="selectedLoan">
-                            <div>
+                            <div class="mt-4 border-t pt-4">
                                 <h2 class="text-xl font-semibold mb-2">Loan Details</h2>
-                                <p><strong>SN:</strong> <span x-text="selectedLoan.sn"></span></p>
-                                <p><strong>Client:</strong> <span x-text="selectedLoan.names"></span></p>
-                                <p><strong>Balance:</strong> <span x-text="formatCurrency(selectedLoan.balance)"></span></p>
-                                <div class="mt-4 space-x-2">
-                                    <button @click="downloadClientPDF" class="bg-green-600 text-white px-4 py-2 rounded">Download PDF</button>
-                                    <button @click="downloadClientCSV" class="bg-blue-600 text-white px-4 py-2 rounded">Download CSV</button>
+                                <div class="grid grid-cols-2 gap-2 mb-4">
+                                    <p><strong>SN:</strong> <span x-text="selectedLoan.sn"></span></p>
+                                    <p><strong>Client:</strong> <span x-text="selectedLoan.names"></span></p>
+                                    <p><strong>Amount:</strong> <span x-text="formatCurrency(selectedLoan.amount)"></span></p>
+                                    <p><strong>Balance:</strong> <span x-text="formatCurrency(selectedLoan.balance)"></span></p>
+                                    <p><strong>Interest Rate:</strong> <span x-text="selectedLoan.int_rate + '%'"></span></p>
+                                    <p><strong>Duration:</strong> <span x-text="selectedLoan.duration + ' months'"></span></p>
+                                    <p><strong>Admin Fees:</strong> <span x-text="formatCurrency(selectedLoan.admin_fees)"></span></p>
+                                    <p><strong>Paid:</strong> <span x-text="formatCurrency(selectedLoan.amt_remitted)"></span></p>
+                                </div>
+                                <div class="space-x-2">
+                                    <button @click="downloadClientPDF" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Download PDF</button>
+                                    <button @click="downloadClientCSV" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Download CSV</button>
+                                </div>
+                            </div>
+                        </template>
+                        
+                        <!-- Client's All Loans Results -->
+                        <template x-if="selectedClientLoans && selectedClientLoans.length > 0 && !selectedLoan">
+                            <div class="mt-4 border-t pt-4">
+                                <div class="flex justify-between items-center mb-3">
+                                    <h2 class="text-xl font-semibold">Loans for: <span x-text="selectedClientName" class="text-indigo-600"></span></h2>
+                                    <div class="space-x-2">
+                                        <button @click="downloadClientAllLoansPDF" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Download All PDF</button>
+                                        <button @click="downloadClientAllLoansCSV" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Download All CSV</button>
+                                    </div>
+                                </div>
+                                <p class="mb-3"><strong>Total Outstanding:</strong> <span x-text="formatCurrency(selectedClientTotalOutstanding)" class="font-bold"></span></p>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full border">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-3 py-2 text-left">SN</th>
+                                                <th class="px-3 py-2 text-left">Date</th>
+                                                <th class="px-3 py-2 text-right">Amount</th>
+                                                <th class="px-3 py-2 text-right">Rate</th>
+                                                <th class="px-3 py-2 text-right">Paid</th>
+                                                <th class="px-3 py-2 text-right">Balance</th>
+                                                <th class="px-3 py-2 text-center">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="loan in selectedClientLoans" :key="loan.id">
+                                                <tr class="border-t hover:bg-gray-50">
+                                                    <td class="px-3 py-2" x-text="loan.sn"></td>
+                                                    <td class="px-3 py-2" x-text="loan.date?.toDate().toLocaleDateString()"></td>
+                                                    <td class="px-3 py-2 text-right" x-text="formatCurrency(loan.amount)"></td>
+                                                    <td class="px-3 py-2 text-right" x-text="loan.int_rate + '%'"></td>
+                                                    <td class="px-3 py-2 text-right" x-text="formatCurrency(loan.amt_remitted)"></td>
+                                                    <td class="px-3 py-2 text-right font-medium" x-text="formatCurrency(loan.balance)"></td>
+                                                    <td class="px-3 py-2 text-center">
+                                                        <button @click="viewSingleLoan(loan)" class="text-indigo-600 hover:underline text-sm">View Details</button>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </template>
