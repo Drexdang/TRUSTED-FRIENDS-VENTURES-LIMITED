@@ -35,7 +35,10 @@ document.addEventListener('alpine:init', () => {
 
         init() {
             this.loadData();
-            db.collection('loans').onSnapshot(snap => this.loans = snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            // Set up real-time listeners
+            db.collection('loans').onSnapshot(snap => {
+                this.loans = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            });
             db.collection('expenses').onSnapshot(snap => this.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() })));
             db.collection('otherIncome').onSnapshot(snap => this.income = snap.docs.map(d => ({ id: d.id, ...d.data() })));
             db.collection('equityTransactions').onSnapshot(snap => this.equityTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -55,10 +58,21 @@ document.addEventListener('alpine:init', () => {
         },
 
         searchLoan() {
-            if (!this.searchSN) return;
+            if (!this.searchSN) {
+                showToast('Please enter a loan SN', 'error');
+                return;
+            }
             const sn = Number(this.searchSN);
             this.selectedLoan = this.loans.find(l => l.sn === sn);
-            if (!this.selectedLoan) showToast('Loan not found', 'error');
+            if (!this.selectedLoan) {
+                showToast('Loan not found', 'error');
+                this.searchMessage = `No loan found with SN: ${this.searchSN}`;
+            } else {
+                this.searchMessage = `Found loan SN: ${this.selectedLoan.sn} for ${this.selectedLoan.names}`;
+                // Clear client search results when showing single loan
+                this.selectedClientLoans = [];
+                this.selectedClientName = '';
+            }
         },
 
         downloadClientPDF() {
@@ -278,9 +292,11 @@ document.addEventListener('alpine:init', () => {
             downloadCSV([flat], `profit_loss_${this.period}.csv`);
         },
 
-        // Client search by name functions
+        // Client search by name function - FIXED
         async searchClientByName() {
-            if (!this.clientNameSearch.trim() || this.clientNameSearch.length < 2) {
+            console.log('Searching for:', this.clientNameSearch); // Debug log
+            
+            if (!this.clientNameSearch || this.clientNameSearch.trim().length < 2) {
                 this.nameSearchResults = [];
                 return;
             }
@@ -288,11 +304,10 @@ document.addEventListener('alpine:init', () => {
             const searchTerm = this.clientNameSearch.toLowerCase().trim();
             
             try {
-                const snapshot = await db.collection('loans').get();
+                // Use the existing loans array instead of fetching again
                 const clientMap = new Map();
                 
-                snapshot.forEach(doc => {
-                    const loan = { id: doc.id, ...doc.data() };
+                this.loans.forEach(loan => {
                     if (loan.names && loan.names.toLowerCase().includes(searchTerm)) {
                         if (!clientMap.has(loan.names)) {
                             clientMap.set(loan.names, {
@@ -310,6 +325,13 @@ document.addEventListener('alpine:init', () => {
                 });
                 
                 this.nameSearchResults = Array.from(clientMap.values());
+                console.log('Search results:', this.nameSearchResults); // Debug log
+                
+                if (this.nameSearchResults.length === 0 && searchTerm.length >= 2) {
+                    this.searchMessage = `No clients found matching "${this.clientNameSearch}"`;
+                } else {
+                    this.searchMessage = '';
+                }
                 
             } catch (error) {
                 console.error('Search error:', error);
@@ -318,6 +340,7 @@ document.addEventListener('alpine:init', () => {
         },
         
         selectClientByName(client) {
+            console.log('Selected client:', client); // Debug log
             this.selectedClientName = client.name;
             this.selectedClientLoans = client.loans;
             this.selectedClientTotalOutstanding = client.totalBalance;
@@ -327,8 +350,10 @@ document.addEventListener('alpine:init', () => {
             this.nameSearchResults = [];
             this.searchMessage = `Found ${client.loanCount} loan(s) for ${client.name}. Total outstanding: ${this.formatCurrency(client.totalBalance)}`;
             
+            // Scroll to results
             setTimeout(() => {
-                document.querySelector('.border-t.pt-4')?.scrollIntoView({ behavior: 'smooth' });
+                const resultsDiv = document.querySelector('.border-t.pt-4');
+                if (resultsDiv) resultsDiv.scrollIntoView({ behavior: 'smooth' });
             }, 100);
         },
         
@@ -339,19 +364,20 @@ document.addEventListener('alpine:init', () => {
         },
         
         clearClientSearch() {
-    this.clientNameSearch = '';
-    this.nameSearchResults = [];
-    this.selectedClientLoans = [];
-    this.selectedClientName = '';
-    this.selectedLoan = null;
-    this.searchSN = '';
-    this.searchMessage = '';
-    // Clear the input field value as well
-    if (this.searchSN) this.searchSN = '';
-},
+            this.clientNameSearch = '';
+            this.nameSearchResults = [];
+            this.selectedClientLoans = [];
+            this.selectedClientName = '';
+            this.selectedLoan = null;
+            this.searchSN = '';
+            this.searchMessage = '';
+        },
         
         async downloadClientAllLoansPDF() {
-            if (!this.selectedClientLoans || this.selectedClientLoans.length === 0) return;
+            if (!this.selectedClientLoans || this.selectedClientLoans.length === 0) {
+                this.showToast('No loans to download', 'error');
+                return;
+            }
             
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
@@ -384,7 +410,10 @@ document.addEventListener('alpine:init', () => {
         },
         
         async downloadClientAllLoansCSV() {
-            if (!this.selectedClientLoans || this.selectedClientLoans.length === 0) return;
+            if (!this.selectedClientLoans || this.selectedClientLoans.length === 0) {
+                this.showToast('No loans to download', 'error');
+                return;
+            }
             
             const headers = ['SN', 'Date', 'Amount (₦)', 'Interest Rate (%)', 'Duration (months)', 'Admin Fees (₦)', 'Paid (₦)', 'Balance (₦)'];
             
