@@ -52,33 +52,52 @@ function generateClientPDF(loan) {
         doc.text(`Generated: ${new Date().toLocaleString()}`, 105, 62, { align: 'center' });
         doc.setTextColor(0);
         doc.setFontSize(14);
-        doc.text(`Client: ${loan.names}`, 14, 80);
+        doc.text(`Client: ${loan.names || 'N/A'}`, 14, 80);
         doc.setFontSize(11);
-        const dateStr = loan.date ? new Date(loan.date.seconds * 1000).toLocaleDateString() : '—';
+        
+        // SAFELY format the date - FIXED
+        let dateStr = '—';
+        if (loan.date) {
+            try {
+                if (loan.date.toDate) {
+                    dateStr = loan.date.toDate().toLocaleDateString();
+                } else if (loan.date.seconds) {
+                    dateStr = new Date(loan.date.seconds * 1000).toLocaleDateString();
+                } else if (typeof loan.date === 'string') {
+                    dateStr = new Date(loan.date).toLocaleDateString();
+                } else if (loan.date instanceof Date) {
+                    dateStr = loan.date.toLocaleDateString();
+                }
+            } catch (e) {
+                console.error('Date parsing error:', e);
+                dateStr = 'Invalid Date';
+            }
+        }
+        
         doc.text(`Disbursement Date: ${dateStr}`, 14, 90);
         doc.setFillColor(240, 248, 255);
         doc.rect(14, 100, 180, 50, 'F');
         doc.setFontSize(12);
-        doc.text(`Principal Amount: NGN ${loan.amount.toLocaleString()}`, 20, 110);
-        doc.text(`Total Interest: NGN ${loan.interest.toLocaleString()}`, 20, 118);
-        doc.text(`Penalty Accumulated: NGN ${loan.penalty_charged.toLocaleString()}`, 20, 126);
-        doc.text(`Grand Total Due: NGN ${loan.g_total.toLocaleString()}`, 20, 134);
+        doc.text(`Principal Amount: NGN ${(loan.amount || 0).toLocaleString()}`, 20, 110);
+        doc.text(`Total Interest: NGN ${(loan.interest || 0).toLocaleString()}`, 20, 118);
+        doc.text(`Penalty Accumulated: NGN ${(loan.penalty_charged || 0).toLocaleString()}`, 20, 126);
+        doc.text(`Grand Total Due: NGN ${(loan.g_total || 0).toLocaleString()}`, 20, 134);
         doc.setTextColor(220, 53, 69);
         doc.setFontSize(14);
-        doc.text(`Outstanding Balance: NGN ${loan.balance.toLocaleString()}`, 20, 146);
+        doc.text(`Outstanding Balance: NGN ${(loan.balance || 0).toLocaleString()}`, 20, 146);
         doc.setTextColor(0);
         if (typeof doc.autoTable === 'function') {
             doc.autoTable({
                 startY: 160,
                 head: [['SN', 'Date', 'Int. Rate', 'Duration', 'Admin Fee', 'Remitted', 'Balance']],
                 body: [[
-                    loan.sn,
+                    loan.sn || 'N/A',
                     dateStr,
-                    loan.int_rate + '%',
-                    loan.duration,
-                    'NGN ' + loan.admin_fees.toLocaleString(),
-                    'NGN ' + loan.amt_remitted.toLocaleString(),
-                    'NGN ' + loan.balance.toLocaleString()
+                    (loan.int_rate || 0) + '%',
+                    loan.duration || 0,
+                    'NGN ' + (loan.admin_fees || 0).toLocaleString(),
+                    'NGN ' + (loan.amt_remitted || 0).toLocaleString(),
+                    'NGN ' + (loan.balance || 0).toLocaleString()
                 ]],
                 theme: 'striped',
                 headStyles: { fillColor: [0, 102, 204] }
@@ -88,7 +107,7 @@ function generateClientPDF(loan) {
         }
         const lastY = doc.lastAutoTable?.finalY || 180;
         addSignature(doc, lastY);
-        doc.save(`loan_${loan.sn}.pdf`);
+        doc.save(`loan_${loan.sn || 'unknown'}.pdf`);
         showToast('PDF generated successfully');
     } catch (error) {
         console.error('PDF generation error:', error);

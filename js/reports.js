@@ -388,7 +388,7 @@ document.addEventListener('alpine:init', () => {
             this.searchMessage = '';
         },
         
-        async downloadClientAllLoansPDF() {
+async downloadClientAllLoansPDF() {
     if (!this.selectedClientLoans || this.selectedClientLoans.length === 0) {
         this.showToast('No loans to download', 'error');
         return;
@@ -404,21 +404,17 @@ document.addEventListener('alpine:init', () => {
     doc.text(`Total Outstanding: ${this.formatCurrency(this.selectedClientTotalOutstanding)}`, 14, 38);
     
     const tableData = this.selectedClientLoans.map(loan => {
-        // Safely format the date
+        // SAFELY format the date - FIXED
         let dateString = '';
         if (loan.date) {
             try {
                 if (loan.date.toDate) {
-                    // Firestore Timestamp
                     dateString = loan.date.toDate().toLocaleDateString();
                 } else if (loan.date.seconds) {
-                    // Firestore Timestamp alternative format
                     dateString = new Date(loan.date.seconds * 1000).toLocaleDateString();
                 } else if (typeof loan.date === 'string') {
-                    // String date
                     dateString = new Date(loan.date).toLocaleDateString();
                 } else if (loan.date instanceof Date) {
-                    // Date object
                     dateString = loan.date.toLocaleDateString();
                 }
             } catch (e) {
