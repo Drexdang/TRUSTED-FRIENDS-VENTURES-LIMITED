@@ -762,7 +762,7 @@
                     <button @click="activeReport='outstanding'; loadOutstanding()" :class="{'font-bold border-b-2 border-indigo-600': activeReport==='outstanding'}" class="pb-2 px-4">Outstanding Balances</button>
                 </div>
 
-                               <!-- Client Report - Search by Name or SN -->
+                                             <!-- Client Report - Search by Name or SN -->
                 <div x-show="activeReport === 'client'">
                     <div class="bg-white p-4 rounded shadow">
                         <h2 class="text-lg font-semibold mb-3">Search Client Records</h2>
@@ -775,7 +775,6 @@
                                     <input type="text" 
                                            x-model="clientNameSearch" 
                                            @input.debounce.300ms="searchClientByName()"
-                                           @focus="searchClientByName()"
                                            placeholder="Type client name..." 
                                            class="border p-2 rounded w-full">
                                     <div x-show="nameSearchResults.length > 0 && clientNameSearch.length >= 2" 
@@ -793,7 +792,8 @@
                                         </template>
                                     </div>
                                 </div>
-                                <button @click="clearClientSearch" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Clear</button>
+                                <button @click="searchClientByName()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Search</button>
+                                <button @click="clearClientSearch()" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Clear</button>
                             </div>
                         </div>
                         
@@ -802,15 +802,16 @@
                             <label class="block text-sm font-medium text-gray-700 mb-1">OR Search by Loan SN:</label>
                             <div class="flex space-x-2">
                                 <input type="text" x-model="searchSN" placeholder="Enter Loan SN" class="border p-2 rounded w-64">
-                                <button @click="searchLoan" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Search</button>
+                                <button @click="searchLoan()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Search</button>
+                                <button @click="clearClientSearch()" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Clear</button>
                             </div>
                         </div>
                         
                         <!-- Search Results Summary -->
                         <div x-show="searchMessage" class="mb-3 p-2 bg-blue-100 text-blue-700 rounded" x-text="searchMessage"></div>
                         
-                        <!-- Loan Details Results -->
-                        <template x-if="selectedLoan">
+                        <!-- Loan Details Results (Single Loan) -->
+                        <template x-if="selectedLoan && !selectedClientLoans.length">
                             <div class="mt-4 border-t pt-4">
                                 <h2 class="text-xl font-semibold mb-2">Loan Details</h2>
                                 <div class="grid grid-cols-2 gap-2 mb-4">
@@ -824,20 +825,20 @@
                                     <p><strong>Paid:</strong> <span x-text="formatCurrency(selectedLoan.amt_remitted)"></span></p>
                                 </div>
                                 <div class="space-x-2">
-                                    <button @click="downloadClientPDF" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Download PDF</button>
-                                    <button @click="downloadClientCSV" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Download CSV</button>
+                                    <button @click="downloadClientPDF()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Download PDF</button>
+                                    <button @click="downloadClientCSV()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Download CSV</button>
                                 </div>
                             </div>
                         </template>
                         
                         <!-- Client's All Loans Results -->
-                        <template x-if="selectedClientLoans && selectedClientLoans.length > 0 && !selectedLoan">
+                        <template x-if="selectedClientLoans && selectedClientLoans.length > 0">
                             <div class="mt-4 border-t pt-4">
                                 <div class="flex justify-between items-center mb-3">
                                     <h2 class="text-xl font-semibold">Loans for: <span x-text="selectedClientName" class="text-indigo-600"></span></h2>
                                     <div class="space-x-2">
-                                        <button @click="downloadClientAllLoansPDF" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Download All PDF</button>
-                                        <button @click="downloadClientAllLoansCSV" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Download All CSV</button>
+                                        <button @click="downloadClientAllLoansPDF()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Download All PDF</button>
+                                        <button @click="downloadClientAllLoansCSV()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Download All CSV</button>
                                     </div>
                                 </div>
                                 <p class="mb-3"><strong>Total Outstanding:</strong> <span x-text="formatCurrency(selectedClientTotalOutstanding)" class="font-bold"></span></p>
@@ -873,6 +874,12 @@
                                 </div>
                             </div>
                         </template>
+                        
+                        <!-- No Results Message -->
+                        <div x-show="clientNameSearch && nameSearchResults.length === 0 && clientNameSearch.length >= 2 && !selectedClientLoans.length && !selectedLoan" 
+                             class="mt-4 p-3 bg-yellow-100 text-yellow-700 rounded">
+                            No clients found matching "<span x-text="clientNameSearch"></span>"
+                        </div>
                     </div>
                 </div>
 

@@ -339,14 +339,16 @@ document.addEventListener('alpine:init', () => {
         },
         
         clearClientSearch() {
-            this.clientNameSearch = '';
-            this.nameSearchResults = [];
-            this.selectedClientLoans = [];
-            this.selectedClientName = '';
-            this.selectedLoan = null;
-            this.searchSN = '';
-            this.searchMessage = '';
-        },
+    this.clientNameSearch = '';
+    this.nameSearchResults = [];
+    this.selectedClientLoans = [];
+    this.selectedClientName = '';
+    this.selectedLoan = null;
+    this.searchSN = '';
+    this.searchMessage = '';
+    // Clear the input field value as well
+    if (this.searchSN) this.searchSN = '';
+},
         
         async downloadClientAllLoansPDF() {
             if (!this.selectedClientLoans || this.selectedClientLoans.length === 0) return;
