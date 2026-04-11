@@ -76,9 +76,24 @@ document.addEventListener('alpine:init', () => {
         },
 
         downloadClientPDF() {
-            if (!this.selectedLoan) return;
-            generateClientPDF(this.selectedLoan);
-        },
+    if (!this.selectedLoan) return;
+    
+    // Make sure the selectedLoan has a properly formatted date
+    const loanCopy = { ...this.selectedLoan };
+    if (loanCopy.date) {
+        try {
+            if (loanCopy.date.toDate) {
+                loanCopy.dateFormatted = loanCopy.date.toDate().toLocaleDateString();
+            } else if (loanCopy.date.seconds) {
+                loanCopy.dateFormatted = new Date(loanCopy.date.seconds * 1000).toLocaleDateString();
+            }
+        } catch (e) {
+            loanCopy.dateFormatted = 'Invalid Date';
+        }
+    }
+    
+    generateClientPDF(loanCopy);
+},
 
         downloadClientCSV() {
             if (!this.selectedLoan) return;
@@ -374,40 +389,65 @@ document.addEventListener('alpine:init', () => {
         },
         
         async downloadClientAllLoansPDF() {
-            if (!this.selectedClientLoans || this.selectedClientLoans.length === 0) {
-                this.showToast('No loans to download', 'error');
-                return;
+    if (!this.selectedClientLoans || this.selectedClientLoans.length === 0) {
+        this.showToast('No loans to download', 'error');
+        return;
+    }
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    doc.setFontSize(18);
+    doc.text(`Loan Statement for ${this.selectedClientName}`, 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 30);
+    doc.text(`Total Outstanding: ${this.formatCurrency(this.selectedClientTotalOutstanding)}`, 14, 38);
+    
+    const tableData = this.selectedClientLoans.map(loan => {
+        // Safely format the date
+        let dateString = '';
+        if (loan.date) {
+            try {
+                if (loan.date.toDate) {
+                    // Firestore Timestamp
+                    dateString = loan.date.toDate().toLocaleDateString();
+                } else if (loan.date.seconds) {
+                    // Firestore Timestamp alternative format
+                    dateString = new Date(loan.date.seconds * 1000).toLocaleDateString();
+                } else if (typeof loan.date === 'string') {
+                    // String date
+                    dateString = new Date(loan.date).toLocaleDateString();
+                } else if (loan.date instanceof Date) {
+                    // Date object
+                    dateString = loan.date.toLocaleDateString();
+                }
+            } catch (e) {
+                console.error('Date parsing error:', e);
+                dateString = 'Invalid Date';
             }
-            
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            
-            doc.setFontSize(18);
-            doc.text(`Loan Statement for ${this.selectedClientName}`, 14, 20);
-            doc.setFontSize(10);
-            doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 30);
-            doc.text(`Total Outstanding: ${this.formatCurrency(this.selectedClientTotalOutstanding)}`, 14, 38);
-            
-            const tableData = this.selectedClientLoans.map(loan => [
-                loan.sn || '',
-                loan.date?.toDate().toLocaleDateString() || '',
-                this.formatCurrency(loan.amount || 0),
-                (loan.int_rate || 0) + '%',
-                this.formatCurrency(loan.amt_remitted || 0),
-                this.formatCurrency(loan.balance || 0)
-            ]);
-            
-            doc.autoTable({
-                startY: 45,
-                head: [['SN', 'Date', 'Amount', 'Rate', 'Paid', 'Balance']],
-                body: tableData,
-                theme: 'striped',
-                headStyles: { fillColor: [79, 70, 229] }
-            });
-            
-            doc.save(`${this.selectedClientName.replace(/\s/g, '_')}_Loans_Statement.pdf`);
-            this.showToast('PDF downloaded successfully', 'success');
-        },
+        }
+        
+        return [
+            loan.sn || '',
+            dateString,
+            this.formatCurrency(loan.amount || 0),
+            (loan.int_rate || 0) + '%',
+            this.formatCurrency(loan.amt_remitted || 0),
+            this.formatCurrency(loan.balance || 0)
+        ];
+    });
+    
+    doc.autoTable({
+        startY: 45,
+        head: [['SN', 'Date', 'Amount', 'Rate', 'Paid', 'Balance']],
+        body: tableData,
+        theme: 'striped',
+        headStyles: { fillColor: [79, 70, 229] }
+    });
+    
+    doc.save(`${this.selectedClientName.replace(/\s/g, '_')}_Loans_Statement.pdf`);
+    this.showToast('PDF downloaded successfully', 'success');
+},
         
         async downloadClientAllLoansCSV() {
             if (!this.selectedClientLoans || this.selectedClientLoans.length === 0) {
